@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="theme-color" content="#F2F2F2">
+    <title>PipGo · Comercio Local</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <script>
+      (function() {
+        var isCordova = window.location.protocol === 'file:' ||
+                         window.cordova !== undefined ||
+                         window.Capacitor !== undefined;
+        if (isCordova) {
+          var s = document.createElement('script');
+          s.src = 'cordova.js';
+          s.async = false;
+          document.head.appendChild(s);
+        }
+      })();
+    </script>
+
+    <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<div id="pipgo-splash">
+    <img src="resources/Splahs.jpg" alt="PipGo">
+</div>
+
+<div id="app">
+    <div class="app-shell">
+
+        <main id="main-content" class="main-content">
+
+            <!-- ============ VISTA: INICIO ============ -->
+            <section id="view-home" class="view active">
+                <header class="home-header" id="home-header">
+                    <div class="topbar">
+                        <div class="brand-group">
+                            <div class="logo-badge">
+                                <img src="resources/android/logo_go.png" alt="PipGo" class="logo-image">
+                            </div>
+                            <div class="brand-text">
+                                <h1>PipGo</h1>
+                                <button class="location-chip" id="location-chip" type="button">
+                                    <i class="fa-solid fa-location-dot"></i>
+                                    <span id="location-text">Detectando…</span>
+                                </button>
+                            </div>
+                        </div>
+                        <button class="icon-btn" id="home-search-btn" aria-label="Buscar">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </button>
+                    </div>
+
+                    <div class="home-hero" id="home-hero">
+                        <p class="hero-greeting" id="home-greeting">Hola</p>
+                        <h2 class="hero-title">¿Qué estás buscando hoy?</h2>
+                    </div>
+                </header>
+
+                <div class="category-strip" id="home-category-strip"></div>
+
+                <div class="section-header">
+                    <h3>Recién publicados</h3>
+                    <button class="text-link" id="btn-ver-todos">Ver todos <i class="fa-solid fa-arrow-right"></i></button>
+                </div>
+                <div id="products-grid" class="products-grid"></div>
+            </section>
+
+            <!-- ============ VISTA: BUSCAR ============ -->
+            <section id="view-search" class="view">
+                <header class="search-header-pro">
+                    <div class="search-header-top">
+                        <div>
+                            <h2>Explorar</h2>
+                            <p class="search-subtitle" id="search-subtitle">Descubre productos cerca de ti</p>
+                        </div>
+                        <button class="icon-btn" id="btn-search-filters" aria-label="Filtros">
+                            <i class="fa-solid fa-sliders"></i>
+                        </button>
+                    </div>
+                    <div class="search-bar-pro">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="search-input" placeholder="Productos, tiendas, categorías…" autocomplete="off">
+                        <button class="clear-search" id="clear-search" aria-label="Limpiar">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <div class="filter-chip-row" id="filter-chip-row"></div>
+                </header>
+
+                <div class="category-scroll" id="search-category-scroll"></div>
+
+                <div class="search-suggestions" id="search-suggestions">
+                    <span class="suggestion-label"><i class="fa-solid fa-fire"></i> Tendencias</span>
+                    <div class="suggestion-chips" id="suggestion-chips"></div>
+                </div>
+
+                <div id="search-results" class="products-grid"></div>
+            </section>
+
+            <!-- ============ VISTA: MENSAJES (V2) ============ -->
+            <section id="view-map" class="view">
+                <header class="view-header">
+                    <h2>Mensajes</h2>
+                </header>
+                <div class="coming-soon">
+                    <div class="coming-soon-icon">
+                        <i class="fa-solid fa-comments"></i>
+                    </div>
+                    <h3>Mensajes directos</h3>
+                    <p>Chatea directamente con los vendedores desde la app.</p>
+                    <span class="badge-dev">En desarrollo · V2</span>
+                </div>
+            </section>
+
+            <!-- ============ VISTA: ANUNCIARME ============ -->
+            <section id="view-anunciarme" class="view">
+                <header class="view-header">
+                    <h2>Anunciarme</h2>
+                </header>
+
+                <div id="login-required" class="login-required">
+                    <i class="fa-solid fa-user-lock"></i>
+                    <h3>Necesitas iniciar sesión</h3>
+                    <p>Para publicar un anuncio debes estar autenticado.</p>
+                    <button class="btn-primary" id="btn-go-auth">Iniciar sesión</button>
+                </div>
+
+                <div class="form-wrapper hidden" id="form-wrapper">
+                    <div class="form-step" id="step-type">
+                        <h3 class="step-title">¿Qué tipo de vendedor eres?</h3>
+                        <p class="step-subtitle">Elige la opción que mejor te describa</p>
+                        <div class="seller-options">
+                            <button class="seller-card" id="type-calle" data-type="calle">
+                                <div class="seller-icon"><i class="fa-solid fa-store"></i></div>
+                                <span class="seller-name">Punto de comercialización Local</span>
+                                <span class="seller-desc">Productos temporales y ambulantes</span>
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                            <button class="seller-card" id="type-establecimiento" data-type="establecimiento">
+                                <div class="seller-icon"><i class="fa-solid fa-shop"></i></div>
+                                <span class="seller-name">Establecimiento</span>
+                                <span class="seller-desc">Negocio con ubicación permanente</span>
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <form id="publication-form" class="publication-form hidden">
+                        <button type="button" class="btn-back" id="btn-back-type">
+                            <i class="fa-solid fa-arrow-left"></i> Volver
+                        </button>
+
+                        <div class="photo-gallery" id="photo-gallery">
+                            <div class="photo-slot main-slot" id="photo-slot-main">
+                                <i class="fa-solid fa-camera"></i>
+                                <span>Foto principal</span>
+                                <input type="file" id="photo-input-main" accept="image/*" hidden>
+                                <img id="photo-preview-main" class="photo-preview hidden" alt="Foto principal">
+                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-main"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                            <div class="photo-slot secondary-slot" id="photo-slot-2">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Foto 2</span>
+                                <input type="file" id="photo-input-2" accept="image/*" hidden>
+                                <img id="photo-preview-2" class="photo-preview hidden" alt="Foto 2">
+                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-2"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                            <div class="photo-slot secondary-slot" id="photo-slot-3">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Foto 3</span>
+                                <input type="file" id="photo-input-3" accept="image/*" hidden>
+                                <img id="photo-preview-3" class="photo-preview hidden" alt="Foto 3">
+                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-3"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                            <div class="photo-slot secondary-slot" id="photo-slot-4">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Foto 4</span>
+                                <input type="file" id="photo-input-4" accept="image/*" hidden>
+                                <img id="photo-preview-4" class="photo-preview hidden" alt="Foto 4">
+                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-4"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                            <div class="photo-slot secondary-slot" id="photo-slot-5">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Foto 5</span>
+                                <input type="file" id="photo-input-5" accept="image/*" hidden>
+                                <img id="photo-preview-5" class="photo-preview hidden" alt="Foto 5">
+                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-5"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="product-category">Categoría</label>
+                            <div class="select-pro-wrap">
+                                <i class="fa-solid fa-tag select-pro-icon"></i>
+                                <select id="product-category" required>
+                                    <option value="" disabled selected>Selecciona una categoría</option>
+                                    <option value="Frutas">Frutas</option>
+                                    <option value="Verduras">Verduras</option>
+                                    <option value="Antojitos">Antojitos</option>
+                                    <option value="Comida preparada">Comida preparada</option>
+                                    <option value="Bebidas">Bebidas</option>
+                                    <option value="Postres">Postres</option>
+                                    <option value="Panadería">Panadería</option>
+                                    <option value="Carnes">Carnes</option>
+                                    <option value="Mariscos">Mariscos</option>
+                                    <option value="Lácteos">Lácteos</option>
+                                    <option value="Productos del campo">Productos del campo</option>
+                                    <option value="Artesanías">Artesanías</option>
+                                    <option value="Ropa y accesorios">Ropa y accesorios</option>
+                                    <option value="Belleza y cuidado">Belleza y cuidado</option>
+                                    <option value="Hogar">Hogar</option>
+                                    <option value="Electrónica">Electrónica</option>
+                                    <option value="Mascotas">Mascotas</option>
+                                    <option value="Servicios">Servicios</option>
+                                    <option value="Juguetes">Juguetes</option>
+                                    <option value="Otros">Otros</option>
+                                </select>
+                                <i class="fa-solid fa-chevron-down select-pro-arrow"></i>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="store-name">Nombre del establecimiento <span class="optional-tag">Opcional</span></label>
+                            <input type="text" id="store-name" placeholder="Ej. Frutería La Esquina" maxlength="60">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="product-name">Nombre del producto</label>
+                            <input type="text" id="product-name" placeholder="Ej. Mango Ataulfo" required maxlength="60">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="product-price">Precio</label>
+                            <div class="input-prefix-wrap">
+                                <span class="input-prefix">$</span>
+                                <input type="tel" id="product-price" placeholder="0.00" inputmode="decimal" required>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="product-phone">Teléfono de contacto <span class="optional-tag">Opcional</span></label>
+                            <div class="input-prefix-wrap">
+                                <span class="input-prefix"><i class="fa-solid fa-phone"></i></span>
+                                <input type="tel" id="product-phone" placeholder="961 123 4567" inputmode="tel" maxlength="20">
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="product-desc">Descripción</label>
+                            <textarea id="product-desc" rows="3" placeholder="Describe tu producto, calidad, ofertas…" maxlength="400"></textarea>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="product-extra-refs">Referencias <span class="optional-tag">Opcional</span></label>
+                            <textarea id="product-extra-refs" rows="2" placeholder="Detalles extra que solo verá quien abra la publicación (horarios, cómo llegar, etc.)" maxlength="300"></textarea>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="product-ref">Referencia del lugar</label>
+                            <input type="text" id="product-ref" placeholder="Calle, colonia, referencias del punto…" required maxlength="120">
+                            <button type="button" class="btn-location" id="btn-get-location">
+                                <i class="fa-solid fa-location-crosshairs"></i> Usar mi ubicación
+                            </button>
+                        </div>
+
+                        <div id="form-error" class="form-error hidden"></div>
+
+                        <button type="submit" class="btn-primary btn-submit" id="btn-submit">
+                            <i class="fa-solid fa-paper-plane"></i> <span id="btn-submit-text">Publicar anuncio</span>
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- ============ VISTA: PERFIL ============ -->
+            <section id="view-perfil" class="view">
+                <div id="profile-content"></div>
+            </section>
+
+        </main>
+
+        <!-- ============ SHEET DE PRODUCTO ============ -->
+        <div id="sheet-backdrop" class="sheet-backdrop">
+            <div id="product-sheet" class="product-sheet">
+                <div class="sheet-drag-zone" id="sheet-drag-zone"><div class="sheet-handle"></div></div>
+                <div class="gallery-container" id="gallery-container">
+                    <div class="gallery-track" id="gallery-track"></div>
+                    <button class="gallery-arrow gallery-arrow-prev" id="gallery-prev" aria-label="Anterior"><i class="fa-solid fa-chevron-left"></i></button>
+                    <button class="gallery-arrow gallery-arrow-next" id="gallery-next" aria-label="Siguiente"><i class="fa-solid fa-chevron-right"></i></button>
+                    <button class="gallery-close" id="gallery-close" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+                    <div class="gallery-dots" id="gallery-dots"></div>
+                    <span class="gallery-hint"><i class="fa-solid fa-expand"></i> Toca para ampliar</span>
+                </div>
+                <div class="sheet-content" id="sheet-content">
+                    <div class="sheet-category-badge" id="sheet-category"></div>
+                    <h2 id="sheet-name" class="sheet-title"></h2>
+                    <p class="sheet-store-name" id="sheet-store"></p>
+                    <div class="sheet-price-row">
+                        <span id="sheet-price" class="sheet-price"></span>
+                        <span id="sheet-time" class="sheet-time"></span>
+                    </div>
+                    <p id="sheet-desc" class="sheet-description"></p>
+
+                    <div class="sheet-refs-block" id="sheet-refs-block">
+                        <div class="refs-header"><i class="fa-solid fa-circle-info"></i> Referencias</div>
+                        <p id="sheet-refs"></p>
+                    </div>
+
+                    <div class="sheet-location-card">
+                        <div class="location-icon"><i class="fa-solid fa-location-dot"></i></div>
+                        <div class="location-info">
+                            <span>Ubicación de referencia</span>
+                            <strong id="sheet-ref"></strong>
+                        </div>
+                        <button class="map-link" id="sheet-map-link"><i class="fa-solid fa-diamond-turn-right"></i> Llegar</button>
+                    </div>
+
+                    <div class="sheet-contact-row hidden" id="sheet-contact-row">
+                        <div class="contact-info">
+                            <i class="fa-solid fa-phone"></i>
+                            <span id="sheet-phone"></span>
+                        </div>
+                        <a class="btn-outline btn-call" id="sheet-call" href="#"><i class="fa-solid fa-phone"></i> Llamar</a>
+                    </div>
+
+                    <div class="sheet-actions">
+                        <button class="btn-primary btn-large" id="btn-directions">
+                            <i class="fa-solid fa-diamond-turn-right"></i> Cómo llegar
+                        </button>
+                        <button class="btn-outline btn-icon-only" id="btn-favorite" aria-label="Guardar">
+                            <i class="fa-regular fa-bookmark"></i>
+                        </button>
+                    </div>
+
+                    <button class="btn-chat-v2" id="btn-chat-v2">
+                        <i class="fa-solid fa-comment-dots"></i> Mensaje directo
+                        <span class="badge-dev-sm">V2</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ LIGHTBOX FULLSCREEN ============ -->
+        <div id="lightbox" class="lightbox hidden">
+            <button class="lightbox-close" id="lightbox-close"><i class="fa-solid fa-xmark"></i></button>
+            <div class="lightbox-counter" id="lightbox-counter">1 / 1</div>
+            <div class="lightbox-track" id="lightbox-track"></div>
+            <div class="lightbox-dots" id="lightbox-dots"></div>
+        </div>
+
+        <!-- ============ MODAL AUTH ============ -->
+        <div id="auth-modal" class="modal-backdrop hidden">
+            <div class="auth-modal">
+                <div class="auth-header">
+                    <h3>Bienvenido a PipGo</h3>
+                    <button class="modal-close" id="auth-close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-auth="login">Iniciar sesión</button>
+                    <button class="auth-tab" data-auth="register">Crear cuenta</button>
+                </div>
+
+                <form id="login-form" class="auth-form">
+                    <div class="input-group">
+                        <label for="login-email">Correo electrónico</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="login-password">Contraseña</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    <button type="submit" class="btn-primary btn-large">Entrar</button>
+                </form>
+
+                <form id="register-form" class="auth-form hidden">
+                    <div class="input-group">
+                        <label for="register-username">Username</label>
+                        <input type="text" id="register-username" required minlength="3" maxlength="20" autocomplete="off" placeholder="Ej. alberto_0506">
+                    </div>
+                    <div class="input-group">
+                        <label for="register-email">Correo electrónico</label>
+                        <input type="email" id="register-email" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="register-password">Contraseña</label>
+                        <input type="password" id="register-password" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn-primary btn-large">Crear cuenta</button>
+                </form>
+                <div id="auth-error" class="form-error hidden"></div>
+            </div>
+        </div>
+
+        <!-- ============ MODAL FILTROS ============ -->
+        <div id="filter-modal" class="modal-backdrop hidden">
+            <div class="auth-modal">
+                <div class="auth-header">
+                    <h3>Filtros</h3>
+                    <button class="modal-close" id="filter-close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="input-group">
+                    <label for="filter-category">Categoría</label>
+                    <div class="select-pro-wrap">
+                        <i class="fa-solid fa-tag select-pro-icon"></i>
+                        <select id="filter-category">
+                            <option value="">Todas</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down select-pro-arrow"></i>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="filter-seller">Tipo de vendedor</label>
+                    <div class="select-pro-wrap">
+                        <i class="fa-solid fa-user select-pro-icon"></i>
+                        <select id="filter-seller">
+                            <option value="">Todos</option>
+                            <option value="calle">Puesto de calle</option>
+                            <option value="establecimiento">Establecimiento</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down select-pro-arrow"></i>
+                    </div>
+                </div>
+                <button class="btn-primary btn-large" id="filter-apply" style="margin-top:16px;">Aplicar</button>
+            </div>
+        </div>
+
+        <!-- ============ MODAL AJUSTES ============ -->
+        <div id="settings-modal" class="modal-backdrop hidden">
+            <div class="auth-modal">
+                <div class="auth-header">
+                    <h3>Ajustes</h3>
+                    <button class="modal-close" id="settings-close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="settings-list" id="settings-list"></div>
+            </div>
+        </div>
+
+        <!-- ============ NAVBAR ============ -->
+        <nav class="bottom-nav" aria-label="Navegación principal">
+            <button class="nav-item active" data-view="home" aria-label="Inicio">
+                <i class="fa-solid fa-house"></i><span>Inicio</span>
+            </button>
+            <button class="nav-item" data-view="search" aria-label="Buscar">
+                <i class="fa-solid fa-magnifying-glass"></i><span>Buscar</span>
+            </button>
+            <button class="nav-item nav-center" data-view="anunciarme" aria-label="Crear publicación">
+                <i class="fa-solid fa-plus"></i><span>Anunciarme</span>
+            </button>
+            <button class="nav-item" data-view="map" aria-label="Mensajes">
+                <i class="fa-solid fa-comments"></i><span>Mensajes</span>
+            </button>
+            <button class="nav-item" data-view="perfil" aria-label="Perfil">
+                <i class="fa-solid fa-user"></i><span>Perfil</span>
+            </button>
+        </nav>
+    </div>
+</div>
+
+<div id="toast" class="toast hidden">
+    <i class="fa-solid fa-circle-check" id="toast-icon"></i>
+    <span id="toast-message"></span>
+</div>
+
+<input type="file" id="avatar-input" accept="image/*" hidden>
+
+<script src="js/core/app-state.js"></script>
+<script src="js/core/logger.js"></script>
+<script src="js/core/error-handler.js"></script>
+<script src="js/core/storage.js"></script>
+<script src="js/core/navigation.js"></script>
+
+<script src="js/config/firebase-config.js"></script>
+<script src="js/config/config.js"></script>
+
+<script src="js/utils/validators.js"></script>
+<script src="js/utils/formatters.js"></script>
+<script src="js/utils/dom.js"></script>
+
+<script src="js/services/auth-service.js"></script>
+<script src="js/services/user-service.js"></script>
+<script src="js/services/publication-service.js"></script>
+<script src="js/services/favorite-service.js"></script>
+<script src="js/services/image-service.js"></script>
+<script src="js/services/location-service.js"></script>
+
+<script src="js/components/toast.js"></script>
+<script src="js/components/splash.js"></script>
+
+<script src="js/features/auth/auth-ui.js"></script>
+<script src="js/features/profile/profile-ui.js"></script>
+<script src="js/features/publications/publication-ui.js"></script>
+<script src="js/features/favorites/favorite-ui.js"></script>
+
+<script src="js/app.js"></script>
+</body>
+</html>
