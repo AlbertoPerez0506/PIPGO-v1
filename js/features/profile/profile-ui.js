@@ -3,6 +3,9 @@
    Perfil rediseñado con tabs (Publicaciones / Favoritos /
    Ventas), modal de ajustes agrupado y edición de avatar
    como botón flotante.
+   Layout inspirado en referencia: título + username a la
+   izquierda, avatar protagonista a la derecha, stats con
+   jerarquía número → etiqueta.
    ===================================================== */
 
 (function () {
@@ -20,7 +23,13 @@
     function renderLoginPrompt() {
         profileContent.innerHTML = `
             <header class="profile-header-pro">
-                <h2>Perfil</h2>
+                <div class="profile-header-row">
+                    <div class="profile-heading">
+                        <div class="title-row">
+                            <h2>Perfil</h2>
+                        </div>
+                    </div>
+                </div>
             </header>
             <div class="login-required">
                 <i class="fa-solid fa-user-lock"></i>
@@ -40,7 +49,13 @@
 
         profileContent.innerHTML = `
             <header class="profile-header-pro">
-                <h2>Perfil</h2>
+                <div class="profile-header-row">
+                    <div class="profile-heading">
+                        <div class="title-row">
+                            <h2>Perfil</h2>
+                        </div>
+                    </div>
+                </div>
             </header>
             <p style="text-align:center;padding:40px;color:var(--text-tertiary);">Cargando perfil…</p>`;
 
@@ -50,7 +65,15 @@
             const profile = await UserService.getProfile(uid);
             if (!profile) {
                 profileContent.innerHTML = `
-                    <header class="profile-header-pro"><h2>Perfil</h2></header>
+                    <header class="profile-header-pro">
+                        <div class="profile-header-row">
+                            <div class="profile-heading">
+                                <div class="title-row">
+                                    <h2>Perfil</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
                     <div class="login-required">
                         <i class="fa-solid fa-triangle-exclamation"></i>
                         <h3>Perfil no encontrado</h3>
@@ -67,50 +90,44 @@
 
             const avatarHtml = profile.avatarUrl
                 ? `<img src="${Formatters.safeUrl(profile.avatarUrl)}" alt="Avatar">`
-                : `<i class="fa-solid fa-user" style="font-size:38px;color:var(--coffee);"></i>`;
+                : `<i class="fa-solid fa-user profile-avatar-fallback-icon"></i>`;
 
             profileContent.innerHTML = `
                 <header class="profile-header-pro">
-                    <h2>Perfil</h2>
-                    <button class="icon-btn" id="btn-open-settings" aria-label="Ajustes">
-                        <i class="fa-solid fa-gear"></i>
-                    </button>
+                    <div class="profile-header-row">
+                        <div class="profile-heading">
+                            <div class="title-row">
+                                <h2>Perfil</h2>
+                                <button class="profile-settings-btn" id="btn-open-settings" aria-label="Ajustes">
+                                    <i class="fa-solid fa-gear"></i>
+                                </button>
+                            </div>
+                            <p class="profile-username">@${Formatters.escapeHtml(profile.username)}</p>
+                        </div>
+
+                        <div class="profile-avatar-wrap">
+                            <div class="profile-avatar" id="profile-avatar">${avatarHtml}</div>
+                            <button class="profile-avatar-edit" id="btn-change-avatar" aria-label="Cambiar foto">
+                                <i class="fa-solid fa-camera"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="profile-stats-pro" role="list">
+                        <div class="stat-pro pub" role="listitem">
+                            <span class="stat-number">${activeCount}</span>
+                            <span class="stat-label">Publicaciones</span>
+                        </div>
+                        <div class="stat-pro fav" role="listitem">
+                            <span class="stat-number">${favorites.length}</span>
+                            <span class="stat-label">Favoritos</span>
+                        </div>
+                        <div class="stat-pro sold" role="listitem">
+                            <span class="stat-number">${soldPublications.length}</span>
+                            <span class="stat-label">Ventas</span>
+                        </div>
+                    </div>
                 </header>
-
-                <div class="profile-hero-pro">
-                    <div class="profile-avatar-wrap">
-                        <div class="profile-avatar" id="profile-avatar">${avatarHtml}</div>
-                        <button class="profile-avatar-edit" id="btn-change-avatar" aria-label="Cambiar foto">
-                            <i class="fa-solid fa-camera"></i>
-                        </button>
-                    </div>
-                    <h3 class="profile-username">@${Formatters.escapeHtml(profile.username)}</h3>
-                    <div class="profile-badge-row">
-                        <span class="user-badge-pro">
-                            <i class="fa-solid fa-circle-check"></i> Vendedor verificado
-                        </span>
-                    </div>
-                </div>
-
-                <div class="profile-stats-pro">
-                    <div class="stat-pro pub">
-                        <div class="stat-icon"><i class="fa-solid fa-box-open"></i></div>
-                        <span class="stat-number">${activeCount}</span>
-                        <span class="stat-label">Publicaciones</span>
-                    </div>
-                    <div class="stat-divider"></div>
-                    <div class="stat-pro fav">
-                        <div class="stat-icon"><i class="fa-solid fa-bookmark"></i></div>
-                        <span class="stat-number">${favorites.length}</span>
-                        <span class="stat-label">Favoritos</span>
-                    </div>
-                    <div class="stat-divider"></div>
-                    <div class="stat-pro sold">
-                        <div class="stat-icon"><i class="fa-solid fa-hand-holding-dollar"></i></div>
-                        <span class="stat-number">${soldPublications.length}</span>
-                        <span class="stat-label">Ventas</span>
-                    </div>
-                </div>
 
                 <div class="profile-tabs" role="tablist">
                     <button class="profile-tab active" data-panel="own" role="tab">
@@ -156,7 +173,15 @@
         } catch (error) {
             Logger.error('Error cargando perfil', error);
             profileContent.innerHTML = `
-                <header class="profile-header-pro"><h2>Perfil</h2></header>
+                <header class="profile-header-pro">
+                    <div class="profile-header-row">
+                        <div class="profile-heading">
+                            <div class="title-row">
+                                <h2>Perfil</h2>
+                            </div>
+                        </div>
+                    </div>
+                </header>
                 <div class="login-required">
                     <i class="fa-solid fa-triangle-exclamation"></i>
                     <h3>No pudimos cargar tu perfil</h3>
