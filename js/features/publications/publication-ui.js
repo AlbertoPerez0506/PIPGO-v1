@@ -68,9 +68,15 @@
         productsGrid.innerHTML = '<p style="text-align:center;padding:30px;color:var(--text-tertiary);">Cargando…</p>';
         try {
             AppState.currentPublications = await PublicationService.getActivePublications();
-            renderProducts(productsGrid, AppState.currentPublications);
-            renderHomeCategories(AppState.currentPublications);
+
+            const homeList = AppState.activeCategoryFilter
+                ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
+                : AppState.currentPublications;
+            renderProducts(productsGrid, homeList);
+
+            renderHomeFilters(AppState.currentPublications);
             renderSearchSuggestions(AppState.currentPublications);
+
             if (AppState.currentView === 'search') {
                 renderSearchResults(getFilteredList());
             }
@@ -157,6 +163,18 @@
         renderFilterChips();
     }
 
+    /**
+     * Se llama al entrar a Home: sincroniza chips de filtros y grilla
+     * con el estado global (por si el usuario filtró en Search).
+     */
+    function onEnterHome() {
+        renderHomeFilters(AppState.currentPublications);
+        const list = AppState.activeCategoryFilter
+            ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
+            : AppState.currentPublications;
+        renderProducts(productsGrid, list);
+    }
+
     /* =====================================================
        CATEGORÍAS DINÁMICAS
        ===================================================== */
@@ -166,28 +184,64 @@
         return [...set];
     }
 
-    function renderHomeCategories(publications) {
-        const strip = document.getElementById('home-category-strip');
+    /**
+     * Filtros del HOME. Reutilizan la misma fuente de datos que Search
+     * (`getActiveCategories`) y filtran la grilla del Home.
+     * El chip "Todos" limpia el filtro.
+     */
+    function renderHomeFilters(publications) {
+        const strip = document.getElementById('home-filter-chips');
         if (!strip) return;
-        const cats = getActiveCategories(publications).slice(0, 8);
+
+        const cats = getActiveCategories(publications || []);
         strip.innerHTML = '';
-        if (!cats.length) { strip.style.display = 'none'; return; }
+
+        if (!cats.length) {
+            strip.style.display = 'none';
+            return;
+        }
         strip.style.display = 'flex';
-        cats.forEach(cat => {
-            const btn = document.createElement('button');
-            btn.className = 'category-pill';
-            btn.textContent = cat;
-            btn.addEventListener('click', () => {
-                AppState.activeCategoryFilter = cat;
-                activeFilterCategory = cat;
-                NavigationUI.switchView('search');
-                setTimeout(() => {
-                    renderCategoriesScroll();
-                    renderSearchResults(getFilteredList());
-                }, 120);
-            });
-            strip.appendChild(btn);
+
+        const current = AppState.activeCategoryFilter || '';
+
+        const makeChip = (label, cat) => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'home-filter-chip' + (current === cat ? ' active' : '');
+            chip.dataset.cat = cat;
+            chip.textContent = label;
+            chip.setAttribute('role', 'tab');
+            chip.setAttribute('aria-selected', current === cat ? 'true' : 'false');
+            chip.addEventListener('click', () => onHomeFilterClick(cat));
+            return chip;
+        };
+
+        strip.appendChild(makeChip('Todos', ''));
+        cats.forEach(cat => strip.appendChild(makeChip(cat, cat)));
+    }
+
+    function onHomeFilterClick(cat) {
+        AppState.activeCategoryFilter = cat || '';
+        activeFilterCategory = cat || '';
+
+        document.querySelectorAll('#home-filter-chips .home-filter-chip').forEach(c => {
+            const isActive = (c.dataset.cat || '') === (cat || '');
+            c.classList.toggle('active', isActive);
+            c.setAttribute('aria-selected', isActive ? 'true' : 'false');
         });
+
+        const list = AppState.activeCategoryFilter
+            ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
+            : AppState.currentPublications;
+
+        renderProducts(productsGrid, list);
+
+        // Sincronizar con la vista Search (si el usuario va hacia allá)
+        if (AppState.currentView === 'search') {
+            renderCategoriesScroll();
+            renderFilterChips();
+            renderSearchResults(getFilteredList());
+        }
     }
 
     function renderCategoriesScroll() {
@@ -634,6 +688,13 @@
         }
     }
 
+    /**
+     * Cierra el product sheet.
+     * - syncHistory = true (botón X, drag, backdrop): remueve la entrada del
+     *   historial con history.back(), evitando dejar un estado duplicado.
+     * - syncHistory = false (Android back): el stack ya se está popando; no
+     *   tocamos el historial aquí.
+     */
     function closeProductSheet(syncHistory = true) {
         sheetBackdrop.classList.remove('open');
         isSheetOpen = false;
@@ -641,8 +702,10 @@
         AppState.currentProduct = null;
 
         if (productSheetHistoryPushed) {
-            if (syncHistory) history.replaceState({ view: AppState.currentView, overlay: null }, '', '');
             productSheetHistoryPushed = false;
+            if (syncHistory) {
+                try { history.back(); } catch (e) { /* noop */ }
+            }
         }
     }
 
@@ -1033,8 +1096,10 @@
         loadPublications,
         renderProducts,
         renderSearchResults,
+        renderHomeFilters,
         showAllPublications,
         onEnterSearch,
+        onEnterHome,
         openProductSheet,
         closeProductSheet,
         openLightbox,

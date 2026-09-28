@@ -52,7 +52,7 @@
                                 <img src="/logo_go.png" alt="PipGo" class="logo-image">
                             </div>
                             <div class="brand-text">
-                                <h1>PipGo</h1>
+                                <h1><span class="brand-pip">Pip</span><span class="brand-go">Go</span></h1>
                                 <button class="location-chip" id="location-chip" type="button">
                                     <i class="fa-solid fa-location-dot"></i>
                                     <span id="location-text">Detectando…</span>
@@ -68,12 +68,17 @@
                         <p class="hero-greeting" id="home-greeting">Hola</p>
                         <h2 class="hero-title">¿Qué estás buscando hoy?</h2>
                     </div>
+
+                    <button class="home-search-trigger" id="home-search-trigger" type="button" aria-label="Abrir buscador">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <span>Buscar frutas, verduras…</span>
+                    </button>
+
+                    <div class="home-filter-chips" id="home-filter-chips" role="tablist" aria-label="Filtrar por categoría"></div>
                 </header>
 
-                <div class="category-strip" id="home-category-strip"></div>
-
                 <div class="section-header">
-                    <h3>Recién publicados</h3>
+                    <h3>Descubre lo que hay cerca de ti</h3>
                     <button class="text-link" id="btn-ver-todos">Ver todos <i class="fa-solid fa-arrow-right"></i></button>
                 </div>
                 <div id="products-grid" class="products-grid"></div>

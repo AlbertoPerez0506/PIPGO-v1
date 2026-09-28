@@ -1,5 +1,5 @@
 (function () {
-    let views, navItems, mainContent, homeSearchBtn, btnVerTodos;
+    let views, navItems, mainContent, homeSearchBtn, homeSearchTrigger, btnVerTodos;
     let navigationStack = ['home'];
     let initialized = false;
 
@@ -16,9 +16,10 @@
 
         mainContent.scrollTo({ top: 0, behavior: 'smooth' });
 
-        // Reset del header inteligente al entrar a Home
-        if (viewName === 'home' && window.PipGoHomeHeader) {
-            window.PipGoHomeHeader.reset();
+        // Reset del header inteligente + sincronización de chips al entrar a Home
+        if (viewName === 'home') {
+            if (window.PipGoHomeHeader) window.PipGoHomeHeader.reset();
+            if (window.PublicationUI && PublicationUI.onEnterHome) PublicationUI.onEnterHome();
         }
 
         if (viewName === 'anunciarme') PublicationUI.updateAuthUI();
@@ -32,6 +33,13 @@
                 history.pushState({ view: viewName }, '', '');
             }
         }
+    }
+
+    function focusSearchInput(delay = 320) {
+        setTimeout(() => {
+            const input = document.getElementById('search-input');
+            if (input) input.focus();
+        }, delay);
     }
 
     function closeAllOverlays() {
@@ -94,6 +102,7 @@
         navItems = document.querySelectorAll('.nav-item');
         mainContent = document.getElementById('main-content');
         homeSearchBtn = document.getElementById('home-search-btn');
+        homeSearchTrigger = document.getElementById('home-search-trigger');
         btnVerTodos = document.getElementById('btn-ver-todos');
 
         navigationStack = ['home'];
@@ -106,10 +115,14 @@
         if (homeSearchBtn) {
             homeSearchBtn.addEventListener('click', () => {
                 switchView('search', { push: true });
-                setTimeout(() => {
-                    const input = document.getElementById('search-input');
-                    if (input) input.focus();
-                }, 320);
+                focusSearchInput();
+            });
+        }
+
+        if (homeSearchTrigger) {
+            homeSearchTrigger.addEventListener('click', () => {
+                switchView('search', { push: true });
+                focusSearchInput();
             });
         }
 

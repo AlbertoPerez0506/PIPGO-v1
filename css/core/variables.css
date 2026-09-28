@@ -46,14 +46,16 @@
     --shadow-xl: 0 24px 60px rgba(0,0,0,0.16);
 
     --nav-shadow:
-        0 12px 32px rgba(0,0,0,0.14),
-        0 4px 12px rgba(0,0,0,0.06);
+        0 12px 32px rgba(20,25,40,0.10),
+        0 4px 12px rgba(20,25,40,0.05);
+
+    /* FAB — ahora alineado al verde PipGo (#2DA657) */
     --fab-shadow:
-        0 14px 30px rgba(242,145,27,0.42),
-        0 6px 14px rgba(242,145,27,0.28);
+        0 14px 30px rgba(45,166,87,0.42),
+        0 6px 14px rgba(45,166,87,0.26);
     --fab-shadow-pressed:
-        0 8px 18px rgba(242,145,27,0.34),
-        0 4px 10px rgba(242,145,27,0.22);
+        0 8px 18px rgba(45,166,87,0.34),
+        0 4px 10px rgba(45,166,87,0.20);
 
     /* Radios */
     --radius-sm: 10px;

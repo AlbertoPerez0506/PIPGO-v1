@@ -12,13 +12,23 @@
         FavoriteUI.init();
     }
 
+    function getTimeGreeting() {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Buenos días';
+        if (hour < 19) return 'Buenas tardes';
+        return 'Buenas noches';
+    }
+
     function updateHomeGreeting(user) {
         const greetingEl = document.getElementById('home-greeting');
         if (!greetingEl) return;
+
+        const prefix = getTimeGreeting();
+
         if (user && AppState.currentProfile && AppState.currentProfile.username) {
-            greetingEl.textContent = `Hola, ${AppState.currentProfile.username}`;
+            greetingEl.textContent = `${prefix}, ${AppState.currentProfile.username}`;
         } else {
-            greetingEl.textContent = 'Hola';
+            greetingEl.textContent = prefix;
         }
     }
 
@@ -78,6 +88,7 @@
        SCROLL INTELIGENTE DEL HEADER (home)
        - Oculta el hero al hacer scroll hacia abajo
        - Lo muestra al hacer scroll hacia arriba
+       - El buscador y los chips permanecen visibles
        ===================================================== */
     function initHomeHeaderScroll() {
         const main = document.getElementById('main-content');
