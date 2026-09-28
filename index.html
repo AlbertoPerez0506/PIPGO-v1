@@ -240,12 +240,12 @@
 
                         <div class="input-group">
                             <label for="store-name">Nombre del establecimiento <span class="optional-tag">Opcional</span></label>
-                            <input type="text" id="store-name" placeholder="Ej. Frutería La Esquina" maxlength="60">
+                            <input type="text" id="store-name" placeholder="Establecimiento" maxlength="60">
                         </div>
 
                         <div class="input-group">
                             <label for="product-name">Nombre del producto</label>
-                            <input type="text" id="product-name" placeholder="Ej. Mango Ataulfo" required maxlength="60">
+                            <input type="text" id="product-name" placeholder="Nombre del producto" required maxlength="60">
                         </div>
 
                         <div class="input-group">
@@ -266,12 +266,12 @@
 
                         <div class="input-group">
                             <label for="product-desc">Descripción</label>
-                            <textarea id="product-desc" rows="3" placeholder="Describe tu producto, calidad, ofertas…" maxlength="400"></textarea>
+                            <textarea id="product-desc" rows="3" placeholder="Describe tu producto, calidad, condición…" maxlength="400"></textarea>
                         </div>
 
                         <div class="input-group">
                             <label for="product-extra-refs">Referencias <span class="optional-tag">Opcional</span></label>
-                            <textarea id="product-extra-refs" rows="2" placeholder="Detalles extra que solo verá quien abra la publicación (horarios, cómo llegar, etc.)" maxlength="300"></textarea>
+                            <textarea id="product-extra-refs" rows="2" placeholder="Detalles extra que solo verá quien abra la publicación (cómo llegar, etc.)" maxlength="300"></textarea>
                         </div>
 
                         <div class="input-group">
@@ -280,6 +280,44 @@
                             <button type="button" class="btn-location" id="btn-get-location">
                                 <i class="fa-solid fa-location-crosshairs"></i> Usar mi ubicación
                             </button>
+                        </div>
+
+                        <!-- ============ HORARIO (opcional) ============ -->
+                        <div class="input-group schedule-group">
+                            <label>Horario <span class="optional-tag">Opcional</span></label>
+
+                            <button type="button" class="schedule-toggle" id="schedule-toggle" aria-expanded="false">
+                                <i class="fa-regular fa-clock"></i>
+                                <span id="schedule-toggle-text">Agregar horario</span>
+                                <i class="fa-solid fa-chevron-down schedule-chevron"></i>
+                            </button>
+
+                            <div class="schedule-panel hidden" id="schedule-panel">
+                                <div class="schedule-days" id="schedule-days" role="group" aria-label="Días del horario">
+                                    <button type="button" data-day="1">L</button>
+                                    <button type="button" data-day="2">M</button>
+                                    <button type="button" data-day="3">X</button>
+                                    <button type="button" data-day="4">J</button>
+                                    <button type="button" data-day="5">V</button>
+                                    <button type="button" data-day="6">S</button>
+                                    <button type="button" data-day="0">D</button>
+                                </div>
+
+                                <div class="schedule-times">
+                                    <div class="input-group">
+                                        <label for="schedule-start">Desde</label>
+                                        <input type="time" id="schedule-start" value="08:00">
+                                    </div>
+                                    <div class="input-group">
+                                        <label for="schedule-end">Hasta</label>
+                                        <input type="time" id="schedule-end" value="12:00">
+                                    </div>
+                                </div>
+
+                                <button type="button" class="btn-clear-schedule hidden" id="btn-clear-schedule">
+                                    <i class="fa-solid fa-trash"></i> Quitar horario
+                                </button>
+                            </div>
                         </div>
 
                         <div id="form-error" class="form-error hidden"></div>
@@ -323,6 +361,15 @@
                     <div class="sheet-refs-block" id="sheet-refs-block">
                         <div class="refs-header"><i class="fa-solid fa-circle-info"></i> Referencias</div>
                         <p id="sheet-refs"></p>
+                    </div>
+
+                    <!-- ============ HORARIO EN DETALLE ============ -->
+                    <div class="sheet-schedule-block hidden" id="sheet-schedule-block">
+                        <div class="sheet-schedule-icon"><i class="fa-regular fa-clock"></i></div>
+                        <div class="sheet-schedule-info">
+                            <span>Horario</span>
+                            <strong id="sheet-schedule-text"></strong>
+                        </div>
                     </div>
 
                     <div class="sheet-location-card">

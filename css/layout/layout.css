@@ -362,6 +362,8 @@
 
 /* =====================================================
    Responsive
+   Mobile-first: teléfonos como caso base.
+   Tablet: ≥600px. Escritorio: >1024px (centrado).
    ===================================================== */
 @media (min-width: 481px) {
     #app { border-radius: 20px; height: 90vh; }
@@ -370,6 +372,27 @@
     }
 }
 
+/* ---------- Tablet ---------- */
+@media (min-width: 600px) and (max-width: 1024px) {
+    #app {
+        max-width: 680px;
+        --sheet-max-width: 680px;
+    }
+    .home-header { padding-left: 22px; padding-right: 22px; }
+    .section-header { padding: 18px 22px 12px; }
+    .products-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        padding: 10px 22px 24px;
+    }
+    .product-img { height: 170px; }
+    .form-wrapper { padding: 12px 24px 40px; }
+    .gallery-container { height: 360px; margin: 0 22px; }
+    .sheet-content { padding: 20px 22px 28px; }
+    .bottom-nav { max-width: 560px; }
+}
+
+/* ---------- Teléfonos pequeños ---------- */
 @media (max-width: 380px) {
     .hero-title { font-size: 20px; }
     .bottom-nav {

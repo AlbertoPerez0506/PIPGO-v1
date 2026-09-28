@@ -1,10 +1,14 @@
 /* =====================================================
    PIPGO · PUBLICATION UI
+   Home, Search, Form (crear/editar), Sheet, Lightbox,
+   Horario opcional y flujo robusto de ubicación.
    ===================================================== */
 
 (function () {
 
-    /* ---------- Referencias DOM ---------- */
+    /* ---------------------------------------------------
+       REFERENCIAS DOM
+       --------------------------------------------------- */
     let publicationForm, stepType, typeCalle, typeEstablecimiento, btnBackType;
     let btnGetLocation, productRefInput, btnSubmit, btnSubmitText, formError;
     let loginRequired, formWrapper, productsGrid, searchResults, searchInput;
@@ -14,23 +18,30 @@
     let sheetCategory, sheetName, sheetStore, sheetPrice, sheetTime, sheetDesc;
     let sheetRefsBlock, sheetRefs, sheetRef;
     let sheetContactRow, sheetPhone, sheetCall;
+    let sheetScheduleBlock, sheetScheduleText;
     let btnDirections, sheetMapLink, btnChatV2;
+
+    /* Horario (form) */
+    let scheduleToggle, schedulePanel, scheduleDays, scheduleStart, scheduleEnd;
+    let scheduleToggleText, btnClearSchedule;
 
     let lightbox, lightboxTrack, lightboxClose, lightboxCounter, lightboxDots;
 
     let photoSlots = [];
 
+    /* Estado del sheet */
     let currentGalleryIndex = 0;
     let isSheetOpen = false;
     let isDraggingSheet = false;
     let sheetStartY = 0, sheetCurrentY = 0;
     let productSheetHistoryPushed = false;
 
+    /* Filtros */
     let filterModal, filterClose, filterApply, filterCategory, filterSeller;
     let activeFilterCategory = '';
     let activeFilterSeller = '';
 
-    /* Lightbox state */
+    /* Lightbox */
     let lightboxImages = [];
     let lightboxIndex = 0;
     let lbDragging = false, lbStartX = 0, lbCurX = 0;
@@ -40,13 +51,22 @@
     let initialized = false;
 
     /* =====================================================
-       HELPERS
+       HELPERS DE FORM
        ===================================================== */
     function showFormError(message) {
         formError.textContent = message;
         formError.classList.remove('hidden');
     }
     function hideFormError() { formError.classList.add('hidden'); }
+
+    /* Cambia texto + icono del botón submit sin tocar el estado disabled */
+    function setSubmitButton(text, iconClass) {
+        btnSubmitText.textContent = text;
+        if (iconClass) {
+            const icon = btnSubmit.querySelector('i');
+            if (icon) icon.className = `fa-solid ${iconClass}`;
+        }
+    }
 
     /* =====================================================
        AUTH
@@ -62,7 +82,7 @@
     }
 
     /* =====================================================
-       CARGA
+       CARGA DE PUBLICACIONES
        ===================================================== */
     async function loadPublications() {
         productsGrid.innerHTML = '<p style="text-align:center;padding:30px;color:var(--text-tertiary);">Cargando…</p>';
@@ -90,6 +110,12 @@
         }
     }
 
+    /* =====================================================
+       CARD DE PRODUCTO
+       Jerarquía: imagen → chip categoría → favorito →
+       establecimiento → nombre → precio (+ chip horario) →
+       meta (distancia · tiempo)
+       ===================================================== */
     function createProductCard(pub) {
         const card = document.createElement('article');
         card.className = 'product-card';
@@ -103,6 +129,29 @@
             ? `<span class="product-store"><i class="fa-solid fa-store"></i> ${Formatters.escapeHtml(pub.storeName)}</span>`
             : '';
 
+        /* Chip de horario (solo si existe) */
+        const scheduleLabel = Formatters.formatScheduleCompact(pub.schedule);
+        const scheduleChip = scheduleLabel
+            ? `<span class="product-schedule-chip" title="${Formatters.escapeHtml(scheduleLabel)}">
+                   <i class="fa-regular fa-clock"></i> ${Formatters.escapeHtml(scheduleLabel)}
+               </span>`
+            : '';
+
+        /* Distancia aproximada (si tenemos coords del usuario y de la pub) */
+        let distanceHtml = '';
+        if (AppState.userCoords && pub.latitude != null && pub.longitude != null) {
+            const meters = Formatters.calculateDistance(
+                AppState.userCoords.latitude, AppState.userCoords.longitude,
+                pub.latitude, pub.longitude
+            );
+            const txt = Formatters.formatDistance(meters);
+            if (txt) distanceHtml = `<i class="fa-solid fa-location-dot"></i><span>${txt}</span>`;
+        }
+
+        const timeText = Formatters.formatRelativeTime(pub.createdAt);
+        const metaSeparator = (distanceHtml && timeText) ? '<span class="dot">·</span>' : '';
+        const timeHtml = timeText ? `<span>${timeText}</span>` : '';
+
         card.innerHTML = `
             <div class="product-img">
                 <img src="${safeImg}" alt="${Formatters.escapeHtml(pub.name || '')}" loading="lazy">
@@ -112,12 +161,12 @@
             <div class="product-info">
                 ${storeLine}
                 <h4>${Formatters.escapeHtml(pub.name || '')}</h4>
-                <span class="product-price">${Formatters.formatPrice(pub.price)}</span>
+                <div class="product-price-row">
+                    <span class="product-price">${Formatters.formatPrice(pub.price)}</span>
+                    ${scheduleChip}
+                </div>
                 <div class="product-meta">
-                    <i class="fa-solid fa-location-dot"></i>
-                    <span>${Formatters.escapeHtml(pub.reference || 'Sin ubicación')}</span>
-                    <span class="dot">·</span>
-                    <span>${Formatters.formatRelativeTime(pub.createdAt)}</span>
+                    ${distanceHtml}${metaSeparator}${timeHtml}
                 </div>
             </div>`;
 
@@ -163,10 +212,7 @@
         renderFilterChips();
     }
 
-    /**
-     * Se llama al entrar a Home: sincroniza chips de filtros y grilla
-     * con el estado global (por si el usuario filtró en Search).
-     */
+    /* Sincroniza Home al volver desde Search u otra vista */
     function onEnterHome() {
         renderHomeFilters(AppState.currentPublications);
         const list = AppState.activeCategoryFilter
@@ -184,11 +230,7 @@
         return [...set];
     }
 
-    /**
-     * Filtros del HOME. Reutilizan la misma fuente de datos que Search
-     * (`getActiveCategories`) y filtran la grilla del Home.
-     * El chip "Todos" limpia el filtro.
-     */
+    /* Chips de filtro en Home */
     function renderHomeFilters(publications) {
         const strip = document.getElementById('home-filter-chips');
         if (!strip) return;
@@ -233,10 +275,8 @@
         const list = AppState.activeCategoryFilter
             ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
             : AppState.currentPublications;
-
         renderProducts(productsGrid, list);
 
-        // Sincronizar con la vista Search (si el usuario va hacia allá)
         if (AppState.currentView === 'search') {
             renderCategoriesScroll();
             renderFilterChips();
@@ -244,6 +284,7 @@
         }
     }
 
+    /* Scroll de categorías en Search */
     function renderCategoriesScroll() {
         const scroll = document.getElementById('search-category-scroll');
         if (!scroll) return;
@@ -296,7 +337,7 @@
     }
 
     /* =====================================================
-       SUGERENCIAS DINÁMICAS
+       SUGERENCIAS DINÁMICAS (Tendencias en Search)
        ===================================================== */
     function renderSearchSuggestions(publications) {
         const suggestions = PublicationService.buildSuggestions(publications);
@@ -369,7 +410,7 @@
     }
 
     /* =====================================================
-       FORMULARIO
+       FORMULARIO — tipo de vendedor
        ===================================================== */
     function selectSellerType(button) {
         typeCalle.classList.remove('selected');
@@ -378,7 +419,7 @@
         stepType.classList.add('hidden');
         publicationForm.classList.remove('hidden');
         publicationForm.dataset.editId = '';
-        btnSubmitText.textContent = 'Publicar anuncio';
+        setSubmitButton('Publicar anuncio', 'fa-paper-plane');
         publicationForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
@@ -386,14 +427,17 @@
         publicationForm.dataset.editId = '';
         publicationForm.reset();
         photoSlots.forEach(resetSlot);
+        resetSchedule();
         stepType.classList.remove('hidden');
         publicationForm.classList.add('hidden');
         typeCalle.classList.remove('selected');
         typeEstablecimiento.classList.remove('selected');
-        btnSubmitText.textContent = 'Publicar anuncio';
+        setSubmitButton('Publicar anuncio', 'fa-paper-plane');
         hideFormError();
+        AppState.currentLocation = null;
     }
 
+    /* ---------- Slots de foto ---------- */
     function resetSlot(slot) {
         slot.preview.classList.add('hidden');
         slot.preview.removeAttribute('src');
@@ -434,31 +478,86 @@
     }
 
     /* =====================================================
+       HORARIO (form)
+       ===================================================== */
+    function setSchedulePanelOpen(open) {
+        schedulePanel.classList.toggle('hidden', !open);
+        scheduleToggle.classList.toggle('open', open);
+        scheduleToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        scheduleToggleText.textContent = open ? 'Horario' : 'Agregar horario';
+    }
+
+    function resetSchedule() {
+        setSchedulePanelOpen(false);
+        scheduleDays.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        scheduleStart.value = '08:00';
+        scheduleEnd.value = '12:00';
+        btnClearSchedule.classList.add('hidden');
+    }
+
+    /* Lee el horario del form. Devuelve null si no está configurado. */
+    function readSchedule() {
+        if (schedulePanel.classList.contains('hidden')) return null;
+        const days = [...scheduleDays.querySelectorAll('button.active')]
+            .map(b => parseInt(b.dataset.day, 10));
+        const start = scheduleStart.value;
+        const end = scheduleEnd.value;
+        if (!days.length) return null;
+        return { days, start, end };
+    }
+
+    /* Aplica un schedule existente al form (edición) */
+    function applyScheduleToForm(schedule) {
+        resetSchedule();
+        if (!schedule || !schedule.days || !schedule.days.length) return;
+        setSchedulePanelOpen(true);
+        scheduleDays.querySelectorAll('button').forEach(b => {
+            const d = parseInt(b.dataset.day, 10);
+            b.classList.toggle('active', schedule.days.includes(d));
+        });
+        scheduleStart.value = schedule.start || '08:00';
+        scheduleEnd.value = schedule.end || '12:00';
+        btnClearSchedule.classList.remove('hidden');
+    }
+
+    /* Actualiza estado visual del botón "quitar horario" */
+    function updateScheduleVisualState() {
+        const hasDays = scheduleDays.querySelectorAll('button.active').length > 0;
+        const hasTimes = scheduleStart.value && scheduleEnd.value;
+        const isConfigured = hasDays && hasTimes;
+        btnClearSchedule.classList.toggle('hidden', !isConfigured);
+    }
+
+    /* =====================================================
        UBICACIÓN
        ===================================================== */
+    /* Verifica si hay coords válidas en el estado */
+    function hasValidLocation() {
+        const loc = AppState.currentLocation;
+        return !!(loc && loc.latitude != null && loc.longitude != null);
+    }
+
+    /* Aplica una ubicación al input de referencia */
+    function applyLocationToInput(location) {
+        const display =
+            location.shortAddress ||
+            location.address ||
+            `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}`;
+        productRefInput.value = display;
+    }
+
+    /* Botón "Usar mi ubicación" — misma lógica que el submit automático */
     async function handleGetLocation() {
         if (!AppState.currentUser) { AuthUI.openAuthModal('login'); return; }
+        if (btnGetLocation.disabled) return;
+
         btnGetLocation.disabled = true;
         btnGetLocation.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Obteniendo ubicación…';
+
         try {
-            const position = await LocationService.getCurrentPosition();
-            AppState.locationPermission = 'granted';
-            const geo = await LocationService.reverseGeocode(position.latitude, position.longitude);
-
-            AppState.currentLocation = {
-                latitude: position.latitude,
-                longitude: position.longitude,
-                accuracy: position.accuracy,
-                address: geo && geo.address || '',
-                shortAddress: geo && geo.shortAddress || '',
-                city: geo && geo.city || '',
-                state: geo && geo.state || '',
-                country: geo && geo.country || ''
-            };
-
-            const displayValue = (geo && (geo.shortAddress || geo.address)) ||
-                `Lat: ${position.latitude.toFixed(4)}, Lon: ${position.longitude.toFixed(4)}`;
-            productRefInput.value = displayValue;
+            const location = await LocationService.fetchFullLocation();
+            AppState.currentLocation = location;
+            applyLocationToInput(location);
             Toast.success('Ubicación detectada. Puedes editarla si es necesario.');
         } catch (error) {
             Toast.error(error.message || 'No pudimos obtener la ubicación.');
@@ -469,18 +568,22 @@
     }
 
     /* =====================================================
-       SUBMIT
+       SUBMIT — flujo robusto de ubicación
        ===================================================== */
     async function handleSubmit(e) {
         e.preventDefault();
         hideFormError();
 
+        /* Evitar doble submit */
         if (AppState.isSubmitting) return;
+
+        /* Requiere sesión */
         if (!AppState.currentUser || !auth.currentUser) {
             showFormError('Debes iniciar sesión para publicar.');
             return;
         }
 
+        /* ---------- Leer valores del formulario ---------- */
         const editId = publicationForm.dataset.editId || '';
         const storeName = document.getElementById('store-name').value.trim();
         const name = document.getElementById('product-name').value.trim();
@@ -491,36 +594,51 @@
         const extraRefs = document.getElementById('product-extra-refs').value.trim();
         const reference = document.getElementById('product-ref').value.trim();
         const sellerType = typeCalle.classList.contains('selected') ? 'calle' : 'establecimiento';
+        const schedule = readSchedule();
 
+        /* ---------- Validaciones con mensajes específicos ---------- */
         const validation = Validators.validatePublication({
             name, price, category,
             mainImage: photoSlots[0].blob || photoSlots[0].uploadedUrl
         });
         if (!validation.valid) { showFormError(validation.error); return; }
 
+        const scheduleValidation = Validators.validateSchedule(schedule);
+        if (!scheduleValidation.valid) { showFormError(scheduleValidation.error); return; }
+
         const mainSlot = photoSlots[0];
         const secondarySlots = photoSlots.slice(1);
 
         AppState.isSubmitting = true;
         btnSubmit.disabled = true;
-        btnSubmitText.textContent = 'Procesando…';
 
         try {
+            /* ---------- PASO 1: Asegurar ubicación ---------- */
             let location = AppState.currentLocation;
-            if (!location) {
-                btnSubmitText.textContent = 'Obteniendo ubicación…';
+
+            if (!hasValidLocation()) {
+                setSubmitButton('Obteniendo ubicación…', 'fa-location-crosshairs');
                 try {
-                    const position = await LocationService.getCurrentPosition({ silent: true });
-                    location = { latitude: position.latitude, longitude: position.longitude, accuracy: position.accuracy };
-                } catch (geoErr) {
-                    location = { latitude: null, longitude: null, accuracy: null };
+                    location = await LocationService.fetchFullLocation();
+                    AppState.currentLocation = location;
+                    applyLocationToInput(location);
+                } catch (locErr) {
+                    /* No guardamos si no hay ubicación: los datos quedan intactos */
+                    showFormError(
+                        locErr.message ||
+                        'No pudimos obtener tu ubicación. Activa el GPS e inténtalo de nuevo.'
+                    );
+                    return;
                 }
-                AppState.currentLocation = location;
+            } else {
+                /* Ya existe: no volver a pedirla innecesariamente */
+                location = AppState.currentLocation;
             }
 
+            /* ---------- PASO 2: Subir imágenes ---------- */
             let mainUrl = mainSlot.uploadedUrl;
             if (mainSlot.blob) {
-                btnSubmitText.textContent = 'Subiendo imagen principal…';
+                setSubmitButton('Subiendo imagen…', 'fa-cloud-arrow-up');
                 const upload = await ImageService.uploadImageToCloudinary(mainSlot.blob);
                 mainUrl = upload.secure_url;
             }
@@ -529,12 +647,13 @@
             for (const slot of secondarySlots) {
                 if (slot.uploadedUrl) imageUrls.push(slot.uploadedUrl);
                 else if (slot.blob) {
-                    btnSubmitText.textContent = 'Subiendo imágenes…';
+                    setSubmitButton('Subiendo imágenes…', 'fa-cloud-arrow-up');
                     const upload = await ImageService.uploadImageToCloudinary(slot.blob);
                     imageUrls.push(upload.secure_url);
                 }
             }
 
+            /* ---------- PASO 3: Construir payload ---------- */
             const payload = {
                 userId: AppState.currentUser.uid,
                 sellerType,
@@ -544,6 +663,7 @@
                 reference,
                 phone: phone || '',
                 category,
+                schedule: schedule || null,   // opcional (compat con docs viejos)
                 mainImage: mainUrl,
                 images: imageUrls,
                 latitude: location.latitude,
@@ -555,27 +675,36 @@
                 country: location.country || ''
             };
 
+            /* ---------- PASO 4: Guardar ---------- */
             if (editId) {
-                btnSubmitText.textContent = 'Guardando cambios…';
+                setSubmitButton('Guardando cambios…', 'fa-floppy-disk');
                 await PublicationService.update(editId, payload);
                 Toast.success('Publicación actualizada.');
             } else {
-                btnSubmitText.textContent = 'Publicando…';
+                setSubmitButton('Publicando…', 'fa-paper-plane');
                 await PublicationService.create(payload);
                 Toast.success('Publicación creada.');
             }
 
+            /* ---------- PASO 5: Reset + volver a Home ---------- */
+            setSubmitButton('Publicado correctamente', 'fa-circle-check');
             resetFormMode();
             AppState.currentLocation = null;
             await loadPublications();
             NavigationUI.switchView('home');
+
         } catch (error) {
             const msg = ErrorHandler.toUserMessage(error, { context: 'publication.submit' });
             showFormError(msg);
         } finally {
             AppState.isSubmitting = false;
             btnSubmit.disabled = false;
-            btnSubmitText.textContent = publicationForm.dataset.editId ? 'Guardar cambios' : 'Publicar anuncio';
+            /* Restaurar texto según modo (edit vs new) */
+            if (publicationForm.dataset.editId) {
+                setSubmitButton('Guardar cambios', 'fa-floppy-disk');
+            } else {
+                setSubmitButton('Publicar anuncio', 'fa-paper-plane');
+            }
         }
     }
 
@@ -598,7 +727,7 @@
 
     function openEditForm(pub) {
         hideFormError();
-        btnSubmitText.textContent = 'Guardar cambios';
+        setSubmitButton('Guardar cambios', 'fa-floppy-disk');
         NavigationUI.switchView('anunciarme');
 
         publicationForm.dataset.editId = pub.id;
@@ -619,12 +748,17 @@
         if (pub.sellerType === 'calle') typeCalle.classList.add('selected');
         else typeEstablecimiento.classList.add('selected');
 
+        /* Fotos */
         photoSlots.forEach(resetSlot);
         const images = [pub.mainImage, ...(pub.images || [])].filter(Boolean);
         images.forEach((url, index) => {
             if (index < photoSlots.length) setSlotImageFromUrl(photoSlots[index], url);
         });
 
+        /* Horario (compat con publicaciones sin schedule) */
+        applyScheduleToForm(pub.schedule || null);
+
+        /* Ubicación */
         AppState.currentLocation = {
             latitude: pub.latitude, longitude: pub.longitude, accuracy: pub.accuracy,
             address: pub.address, city: pub.city, state: pub.state, country: pub.country
@@ -654,6 +788,7 @@
         sheetTime.innerHTML = `<i class="fa-solid fa-clock"></i> ${Formatters.formatRelativeTime(product.createdAt)}`;
         sheetDesc.textContent = product.description || 'Sin descripción.';
 
+        /* Referencias extra */
         if (product.extraRefs && product.extraRefs.trim()) {
             sheetRefsBlock.classList.remove('hidden');
             sheetRefs.textContent = product.extraRefs;
@@ -661,8 +796,20 @@
             sheetRefsBlock.classList.add('hidden');
         }
 
-        sheetRef.textContent = product.address || product.reference || 'Sin referencia';
+        /* Ubicación + distancia */
+        const baseRef = product.address || product.reference || 'Sin referencia';
+        let refText = baseRef;
+        if (AppState.userCoords && product.latitude != null && product.longitude != null) {
+            const meters = Formatters.calculateDistance(
+                AppState.userCoords.latitude, AppState.userCoords.longitude,
+                product.latitude, product.longitude
+            );
+            const dist = Formatters.formatDistance(meters);
+            if (dist) refText = `${baseRef} · ${dist}`;
+        }
+        sheetRef.textContent = refText;
 
+        /* Contacto */
         if (product.phone && product.phone.trim()) {
             sheetContactRow.classList.remove('hidden');
             sheetPhone.textContent = product.phone;
@@ -671,6 +818,16 @@
             sheetContactRow.classList.add('hidden');
         }
 
+        /* Horario (opcional) */
+        const scheduleFull = Formatters.formatScheduleFull(product.schedule);
+        if (scheduleFull) {
+            sheetScheduleBlock.classList.remove('hidden');
+            sheetScheduleText.textContent = scheduleFull;
+        } else {
+            sheetScheduleBlock.classList.add('hidden');
+        }
+
+        /* Galería */
         const allImages = [product.mainImage, ...(product.images || [])].filter(Boolean);
         buildGallery(allImages);
 
@@ -688,13 +845,6 @@
         }
     }
 
-    /**
-     * Cierra el product sheet.
-     * - syncHistory = true (botón X, drag, backdrop): remueve la entrada del
-     *   historial con history.back(), evitando dejar un estado duplicado.
-     * - syncHistory = false (Android back): el stack ya se está popando; no
-     *   tocamos el historial aquí.
-     */
     function closeProductSheet(syncHistory = true) {
         sheetBackdrop.classList.remove('open');
         isSheetOpen = false;
@@ -709,6 +859,7 @@
         }
     }
 
+    /* ---------- Galería ---------- */
     function buildGallery(images) {
         galleryTrack.innerHTML = '';
         galleryDots.innerHTML = '';
@@ -764,7 +915,7 @@
         });
     }
 
-    /* ---------- Galería: swipe ---------- */
+    /* Swipe de la galería dentro del sheet */
     let galStartX = 0, galCurX = 0, galSwiping = false;
     function handleGalleryPointerDown(e) {
         if (e.pointerType !== 'touch') return;
@@ -939,7 +1090,7 @@
     }
 
     /* =====================================================
-       NAVEGACIÓN EXTERNA
+       NAVEGACIÓN EXTERNA (mapas)
        ===================================================== */
     function openDirections(product) {
         if (!product) return;
@@ -963,6 +1114,7 @@
         if (initialized) return;
         initialized = true;
 
+        /* Referencias DOM */
         publicationForm = document.getElementById('publication-form');
         stepType = document.getElementById('step-type');
         typeCalle = document.getElementById('type-calle');
@@ -1001,9 +1153,20 @@
         sheetContactRow = document.getElementById('sheet-contact-row');
         sheetPhone = document.getElementById('sheet-phone');
         sheetCall = document.getElementById('sheet-call');
+        sheetScheduleBlock = document.getElementById('sheet-schedule-block');
+        sheetScheduleText = document.getElementById('sheet-schedule-text');
         btnDirections = document.getElementById('btn-directions');
         sheetMapLink = document.getElementById('sheet-map-link');
         btnChatV2 = document.getElementById('btn-chat-v2');
+
+        /* Horario */
+        scheduleToggle = document.getElementById('schedule-toggle');
+        schedulePanel = document.getElementById('schedule-panel');
+        scheduleDays = document.getElementById('schedule-days');
+        scheduleStart = document.getElementById('schedule-start');
+        scheduleEnd = document.getElementById('schedule-end');
+        scheduleToggleText = document.getElementById('schedule-toggle-text');
+        btnClearSchedule = document.getElementById('btn-clear-schedule');
 
         lightbox = document.getElementById('lightbox');
         lightboxTrack = document.getElementById('lightbox-track');
@@ -1011,6 +1174,7 @@
         lightboxCounter = document.getElementById('lightbox-counter');
         lightboxDots = document.getElementById('lightbox-dots');
 
+        /* Slots de foto */
         photoSlots = [
             { slot: document.getElementById('photo-slot-main'), input: document.getElementById('photo-input-main'), preview: document.getElementById('photo-preview-main'), removeBtn: document.querySelector('[data-preview="photo-preview-main"]'), blob: null, previewUrl: null, uploadedUrl: '' },
             { slot: document.getElementById('photo-slot-2'), input: document.getElementById('photo-input-2'), preview: document.getElementById('photo-preview-2'), removeBtn: document.querySelector('[data-preview="photo-preview-2"]'), blob: null, previewUrl: null, uploadedUrl: '' },
@@ -1019,21 +1183,25 @@
             { slot: document.getElementById('photo-slot-5'), input: document.getElementById('photo-input-5'), preview: document.getElementById('photo-preview-5'), removeBtn: document.querySelector('[data-preview="photo-preview-5"]'), blob: null, previewUrl: null, uploadedUrl: '' }
         ];
 
+        /* Filtros */
         filterModal = document.getElementById('filter-modal');
         filterClose = document.getElementById('filter-close');
         filterApply = document.getElementById('filter-apply');
         filterCategory = document.getElementById('filter-category');
         filterSeller = document.getElementById('filter-seller');
 
+        /* Precio: solo dígitos + punto */
         const priceInput = document.getElementById('product-price');
         priceInput.addEventListener('input', (e) => {
             e.target.value = Formatters.sanitizePriceInput(e.target.value);
         });
 
+        /* Tipo de vendedor */
         typeCalle.addEventListener('click', () => selectSellerType(typeCalle));
         typeEstablecimiento.addEventListener('click', () => selectSellerType(typeEstablecimiento));
         btnBackType.addEventListener('click', resetFormMode);
 
+        /* Slots de foto */
         photoSlots.forEach(slot => {
             slot.slot.addEventListener('click', () => { if (!slot.uploadedUrl) slot.input.click(); });
             slot.input.addEventListener('change', e => {
@@ -1043,9 +1211,31 @@
             slot.removeBtn.addEventListener('click', e => { e.stopPropagation(); resetSlot(slot); });
         });
 
+        /* Horario */
+        scheduleToggle.addEventListener('click', () => {
+            const willOpen = schedulePanel.classList.contains('hidden');
+            setSchedulePanelOpen(willOpen);
+        });
+        scheduleDays.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-day]');
+            if (!btn) return;
+            btn.classList.toggle('active');
+            updateScheduleVisualState();
+        });
+        scheduleStart.addEventListener('change', updateScheduleVisualState);
+        scheduleEnd.addEventListener('change', updateScheduleVisualState);
+        btnClearSchedule.addEventListener('click', () => {
+            resetSchedule();
+            setSchedulePanelOpen(false);
+        });
+
+        /* Ubicación */
         btnGetLocation.addEventListener('click', handleGetLocation);
+
+        /* Submit */
         publicationForm.addEventListener('submit', handleSubmit);
 
+        /* Búsqueda */
         searchInput.addEventListener('input', handleSearchInput);
         clearSearch.addEventListener('click', () => {
             searchInput.value = '';
@@ -1054,11 +1244,13 @@
             handleSearchInput();
         });
 
+        /* Filtros modal */
         const btnFilters = document.getElementById('btn-search-filters');
         if (btnFilters) btnFilters.addEventListener('click', openFilterModal);
         if (filterClose) filterClose.addEventListener('click', closeFilterModal);
         if (filterApply) filterApply.addEventListener('click', applyFilters);
 
+        /* Sheet: galería, drag, links */
         galleryClose.addEventListener('click', () => closeProductSheet());
         galleryPrev.addEventListener('click', (e) => { e.stopPropagation(); goToGallerySlide(currentGalleryIndex - 1); });
         galleryNext.addEventListener('click', (e) => { e.stopPropagation(); goToGallerySlide(currentGalleryIndex + 1); });
@@ -1080,6 +1272,7 @@
             Toast.info('Los mensajes directos llegarán en la V2.');
         });
 
+        /* Lightbox */
         lightboxClose.addEventListener('click', closeLightbox);
         lightbox.addEventListener('click', (e) => {
             if (e.target === lightbox) closeLightbox();
@@ -1090,6 +1283,9 @@
         lightboxTrack.addEventListener('pointercancel', handleLightboxUp);
     }
 
+    /* =====================================================
+       API PÚBLICA
+       ===================================================== */
     window.PublicationUI = {
         init,
         updateAuthUI,

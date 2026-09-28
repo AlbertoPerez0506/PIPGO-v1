@@ -1,16 +1,19 @@
 /* =====================================================
    PIPGO · LOCATION SERVICE
    Geolocalización + reverse geocoding (Nominatim).
-   Detecta la ciudad del usuario para el header.
+   Fuente única de verdad para ubicación del usuario.
    ===================================================== */
 
 window.LocationService = {
 
+    /* =================================================
+       Obtener posición actual (Promise)
+       ================================================= */
     getCurrentPosition(options = {}) {
         const { silent = false } = options;
         return new Promise((resolve, reject) => {
             if (!navigator.geolocation) {
-                reject(new Error('Geolocalización no soportada en este dispositivo.'));
+                reject(new Error('Tu dispositivo no soporta geolocalización.'));
                 return;
             }
             navigator.geolocation.getCurrentPosition(
@@ -32,15 +35,20 @@ window.LocationService = {
         });
     },
 
+    /* Traduce códigos de error del navegador a mensajes claros */
     getGeolocationErrorMessage(error) {
         switch (error.code) {
-            case 1: return 'Permiso de ubicación denegado. Actívalo en ajustes.';
-            case 2: return 'No se pudo obtener la ubicación actual.';
-            case 3: return 'El GPS tardó demasiado en responder.';
-            default: return error.message || 'Error al obtener ubicación.';
+            case 1: return 'Permiso de ubicación denegado. Actívalo en los ajustes del sistema.';
+            case 2: return 'No pudimos obtener tu ubicación actual. Verifica que el GPS esté activo.';
+            case 3: return 'El GPS tardó demasiado en responder. Inténtalo de nuevo.';
+            default: return error.message || 'No pudimos obtener tu ubicación.';
         }
     },
 
+    /* =================================================
+       Reverse geocoding (Nominatim)
+       Devuelve objeto enriquecido o null si falla.
+       ================================================= */
     async reverseGeocode(lat, lon) {
         try {
             const controller = new AbortController();
@@ -57,16 +65,10 @@ window.LocationService = {
             const data = await response.json();
             if (data && data.address) {
                 const addr = data.address;
-                // Prioridad: ciudad → pueblo → villa → municipio → condado → estado
                 const cityName =
-                    addr.city ||
-                    addr.town ||
-                    addr.village ||
-                    addr.municipality ||
-                    addr.county ||
-                    addr.state_district ||
-                    addr.state ||
-                    '';
+                    addr.city || addr.town || addr.village ||
+                    addr.municipality || addr.county ||
+                    addr.state_district || addr.state || '';
                 return {
                     address: data.display_name || '',
                     shortAddress: this._buildShortAddress(addr),
@@ -86,6 +88,7 @@ window.LocationService = {
         }
     },
 
+    /* Dirección corta a partir de componentes Nominatim */
     _buildShortAddress(addr) {
         const parts = [];
         if (addr.road) parts.push(addr.road);
@@ -94,11 +97,53 @@ window.LocationService = {
         return parts.filter(Boolean).join(', ');
     },
 
-    /* Devuelve solo el nombre de ciudad/pueblo listo para mostrar */
+    /* =================================================
+       Detectar ciudad del header
+       Guarda coords del usuario en AppState para distancias.
+       ================================================= */
     async detectUserCity() {
         const position = await this.getCurrentPosition({ silent: true });
         const geo = await this.reverseGeocode(position.latitude, position.longitude);
         const cityName = geo && geo.city ? geo.city : null;
+
+        // Guardar coords del usuario para cálculos de distancia
+        AppState.userCoords = {
+            latitude: position.latitude,
+            longitude: position.longitude
+        };
+
         return { position, geo, cityName };
+    },
+
+    /* =================================================
+       fetchFullLocation — fuente única de verdad
+       Usada por "Usar mi ubicación" y por el submit.
+       Devuelve ubicación completa lista para publicar.
+       ================================================= */
+    async fetchFullLocation() {
+        const position = await this.getCurrentPosition();
+
+        // Reverse geocoding es opcional: si falla, seguimos con coords
+        let geo = null;
+        try {
+            geo = await this.reverseGeocode(position.latitude, position.longitude);
+        } catch (e) { /* noop */ }
+
+        // Actualizar coords del usuario (para distancias en cards)
+        AppState.userCoords = {
+            latitude: position.latitude,
+            longitude: position.longitude
+        };
+
+        return {
+            latitude: position.latitude,
+            longitude: position.longitude,
+            accuracy: position.accuracy,
+            address: (geo && geo.address) || '',
+            shortAddress: (geo && geo.shortAddress) || '',
+            city: (geo && geo.city) || '',
+            state: (geo && geo.state) || '',
+            country: (geo && geo.country) || ''
+        };
     }
 };

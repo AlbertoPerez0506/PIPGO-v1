@@ -73,6 +73,7 @@
     overflow: hidden; box-shadow: var(--shadow-xs);
     cursor: pointer; position: relative;
     transition: all var(--duration-base) var(--ease-smooth);
+    display: flex; flex-direction: column;
 }
 .product-card:active { transform: scale(0.96); box-shadow: var(--shadow-md); }
 
@@ -100,6 +101,8 @@
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     z-index: 1;
+    max-width: calc(100% - 60px);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .sold-badge {
@@ -129,23 +132,50 @@
 .product-favorite:active { transform: scale(0.9); }
 .product-favorite.is-fav { color: var(--primary); }
 
-.product-info { padding: 12px 14px 14px; }
+/* Información de la tarjeta */
+.product-info { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; }
+
 .product-info h4 {
-    font-size: 15px; font-weight: 600; margin-bottom: 4px;
+    font-size: 15px; font-weight: 700; margin: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     color: var(--text-primary);
+    letter-spacing: -0.2px;
 }
+
 .product-store {
     display: flex; align-items: center; gap: 4px;
     font-size: 11px; color: var(--text-secondary);
-    margin-bottom: 4px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-weight: 500;
 }
-.product-store i { font-size: 9px; color: var(--primary); }
-.product-price { color: var(--primary); font-weight: 800; font-size: 17px; }
+.product-store i { font-size: 9px; color: var(--primary); flex-shrink: 0; }
+
+/* Fila de precio + chip horario */
+.product-price-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 6px; margin-top: 2px;
+}
+.product-price {
+    color: var(--primary); font-weight: 800; font-size: 17px;
+    letter-spacing: -0.3px;
+}
+
+.product-schedule-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--accent-light);
+    color: var(--accent-dark);
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 10px; font-weight: 700;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis;
+    flex-shrink: 1;
+}
+.product-schedule-chip i { font-size: 9px; flex-shrink: 0; }
 
 .product-meta {
-    display: flex; gap: 6px; margin-top: 6px;
+    display: flex; gap: 4px; margin-top: 2px;
     font-size: 11px; color: var(--text-secondary); align-items: center;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -231,6 +261,95 @@
     padding: 12px 16px; border-radius: var(--radius-sm);
     font-size: 14px; font-weight: 500;
 }
+
+/* =====================================================
+   HORARIO (form) — opcional
+   ===================================================== */
+.schedule-group { gap: 8px; }
+
+.schedule-toggle {
+    width: 100%;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    font-family: inherit;
+    font-size: 14px; font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-smooth);
+}
+.schedule-toggle:active { background: var(--bg); }
+.schedule-toggle i:first-child { color: var(--primary); font-size: 15px; }
+.schedule-toggle span { flex: 1; text-align: left; }
+.schedule-toggle .schedule-chevron {
+    color: var(--text-tertiary);
+    font-size: 12px;
+    transition: transform var(--duration-fast) var(--ease-smooth);
+}
+.schedule-toggle.open .schedule-chevron { transform: rotate(180deg); }
+
+.schedule-panel {
+    margin-top: 8px;
+    padding: 14px;
+    background: var(--surface-secondary);
+    border-radius: var(--radius-sm);
+    display: flex; flex-direction: column; gap: 14px;
+    animation: formSlideIn 0.3s var(--ease-smooth);
+}
+.schedule-panel.hidden { display: none; }
+
+.schedule-days {
+    display: flex; gap: 6px;
+    justify-content: space-between;
+}
+.schedule-days button {
+    flex: 1;
+    aspect-ratio: 1 / 1;
+    max-width: 44px;
+    min-height: 40px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-smooth);
+}
+.schedule-days button:active { transform: scale(0.94); }
+.schedule-days button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(45,166,87,0.28);
+}
+
+.schedule-times {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.schedule-times .input-group { gap: 4px; }
+.schedule-times label { font-size: 11.5px; }
+.schedule-times input {
+    padding: 10px 12px;
+    font-size: 14px;
+}
+
+.btn-clear-schedule {
+    align-self: flex-start;
+    background: none; border: none;
+    color: var(--danger-fg);
+    font-family: inherit;
+    font-size: 12.5px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+    cursor: pointer;
+    padding: 4px 0;
+}
+.btn-clear-schedule i { font-size: 11px; }
+.btn-clear-schedule.hidden { display: none; }
 
 /* ---------- Photo gallery (publicar) ---------- */
 .photo-gallery {
@@ -518,6 +637,36 @@
     line-height: 1.55; white-space: pre-line;
 }
 .sheet-refs-block.hidden { display: none; }
+
+/* ---------- Bloque de horario en el sheet ---------- */
+.sheet-schedule-block {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--accent-light);
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+}
+.sheet-schedule-block.hidden { display: none; }
+.sheet-schedule-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+}
+.sheet-schedule-info { flex: 1; min-width: 0; }
+.sheet-schedule-info span {
+    font-size: 10.5px; color: var(--accent-dark);
+    font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block; margin-bottom: 3px;
+}
+.sheet-schedule-info strong {
+    font-size: 13.5px; font-weight: 600;
+    color: var(--text-primary);
+    display: block;
+    line-height: 1.4;
+}
 
 .sheet-location-card {
     display: flex; align-items: center; gap: 12px;

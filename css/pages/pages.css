@@ -330,7 +330,8 @@
 .profile-panel.active { display: block; }
 
 /* =====================================================
-   RESPONSIVE
+   RESPONSIVE — mobile first
+   Base: teléfonos pequeños. Tablet: ≥600px.
    ===================================================== */
 @media (max-width: 380px) {
     .products-grid { gap: 8px; padding: 6px 10px 16px; }
@@ -338,4 +339,5 @@
     .gallery-container { height: 240px; }
     .hero-title { font-size: 22px; }
     .photo-gallery { grid-template-rows: 100px 100px; }
+    .schedule-days button { font-size: 12px; max-width: 38px; min-height: 36px; }
 }
