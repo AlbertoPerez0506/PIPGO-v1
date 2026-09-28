@@ -8,27 +8,37 @@
     --bg: #F2F2F2;
     --surface: #FFFFFF;
     --surface-secondary: #F7F7F7;
+    --surface-alt: #FAFAFB;
     --text-primary: #1A1A1A;
     --text-secondary: #5F5F5F;
     --text-tertiary: #9E9E9E;
     --border: #E0E0E0;
     --border-soft: #ECECEF;
 
+    /* Acento cálido (precios, destacados) */
     --primary: #F2911B;
     --primary-dark: #D97F0F;
     --primary-light: #FFF0E0;
 
+    /* Acción principal PipGo (verde) */
     --accent: #2DA657;
     --accent-dark: #238C45;
     --accent-light: #E8F5E9;
+    --accent-soft: #D3EEDB;
 
+    /* Identidad PipGo (café) */
     --coffee: #A65F37;
+    --coffee-dark: #8A4C2A;
     --coffee-light: #F5EDE6;
+
+    /* Acento suave */
     --star: #F2BE5C;
+    --star-light: #FFF6E0;
 
     /* Estados semánticos */
     --danger-bg: #FEE2E2;
     --danger-fg: #B91C1C;
+    --danger-soft: #FCA5A5;
 
     --success: #16A34A;
     --success-bg: #DCFCE7;
@@ -49,7 +59,6 @@
         0 12px 32px rgba(20,25,40,0.10),
         0 4px 12px rgba(20,25,40,0.05);
 
-    /* FAB — ahora alineado al verde PipGo (#2DA657) */
     --fab-shadow:
         0 14px 30px rgba(45,166,87,0.42),
         0 6px 14px rgba(45,166,87,0.26);

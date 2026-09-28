@@ -1,16 +1,22 @@
 /* =====================================================
    PIPGO · PROFILE UI
-   Perfil rediseñado con tabs, modal de ajustes, ventas.
+   Perfil rediseñado con tabs (Publicaciones / Favoritos /
+   Ventas), modal de ajustes agrupado y edición de avatar
+   como botón flotante.
    ===================================================== */
 
 (function () {
     let profileContent, avatarInput;
     let ownPublications = [];
     let favorites = [];
+    let soldPublications = [];
     let initialized = false;
 
     let settingsModal, settingsClose;
 
+    /* -----------------------------------------------------
+       LOGIN PROMPT
+       ----------------------------------------------------- */
     function renderLoginPrompt() {
         profileContent.innerHTML = `
             <header class="profile-header-pro">
@@ -26,6 +32,9 @@
         if (btn) btn.addEventListener('click', () => AuthUI.openAuthModal('login'));
     }
 
+    /* -----------------------------------------------------
+       RENDER PRINCIPAL
+       ----------------------------------------------------- */
     async function renderProfile() {
         if (!AppState.currentUser) { renderLoginPrompt(); return; }
 
@@ -43,7 +52,7 @@
                 profileContent.innerHTML = `
                     <header class="profile-header-pro"><h2>Perfil</h2></header>
                     <div class="login-required">
-                        <i class="fa-solid fa-exclamation-triangle"></i>
+                        <i class="fa-solid fa-triangle-exclamation"></i>
                         <h3>Perfil no encontrado</h3>
                     </div>`;
                 return;
@@ -52,13 +61,13 @@
             AppState.currentProfile = profile;
             ownPublications = await PublicationService.getUserPublications(uid);
             favorites = await FavoriteService.getFavoritePublications(uid);
+            soldPublications = ownPublications.filter(p => p.status === 'sold');
 
-            const soldCount = ownPublications.filter(p => p.status === 'sold').length;
             const activeCount = ownPublications.filter(p => p.status === 'active').length;
 
             const avatarHtml = profile.avatarUrl
                 ? `<img src="${Formatters.safeUrl(profile.avatarUrl)}" alt="Avatar">`
-                : `<i class="fa-solid fa-user" style="font-size:38px;color:var(--text-tertiary);"></i>`;
+                : `<i class="fa-solid fa-user" style="font-size:38px;color:var(--coffee);"></i>`;
 
             profileContent.innerHTML = `
                 <header class="profile-header-pro">
@@ -69,40 +78,49 @@
                 </header>
 
                 <div class="profile-hero-pro">
-                    <div class="profile-avatar" id="profile-avatar">${avatarHtml}</div>
+                    <div class="profile-avatar-wrap">
+                        <div class="profile-avatar" id="profile-avatar">${avatarHtml}</div>
+                        <button class="profile-avatar-edit" id="btn-change-avatar" aria-label="Cambiar foto">
+                            <i class="fa-solid fa-camera"></i>
+                        </button>
+                    </div>
                     <h3 class="profile-username">@${Formatters.escapeHtml(profile.username)}</h3>
-                    <span class="user-badge-pro"><i class="fa-solid fa-circle-check"></i> Vendedor verificado</span>
-                    <button class="btn-outline edit-profile-btn" id="btn-change-avatar">
-                        <i class="fa-solid fa-camera"></i> Cambiar foto
-                    </button>
+                    <div class="profile-badge-row">
+                        <span class="user-badge-pro">
+                            <i class="fa-solid fa-circle-check"></i> Vendedor verificado
+                        </span>
+                    </div>
                 </div>
 
                 <div class="profile-stats-pro">
                     <div class="stat-pro pub">
-                        <i class="stat-icon fa-solid fa-box-open"></i>
+                        <div class="stat-icon"><i class="fa-solid fa-box-open"></i></div>
                         <span class="stat-number">${activeCount}</span>
                         <span class="stat-label">Publicaciones</span>
                     </div>
                     <div class="stat-divider"></div>
                     <div class="stat-pro fav">
-                        <i class="stat-icon fa-solid fa-bookmark"></i>
+                        <div class="stat-icon"><i class="fa-solid fa-bookmark"></i></div>
                         <span class="stat-number">${favorites.length}</span>
                         <span class="stat-label">Favoritos</span>
                     </div>
                     <div class="stat-divider"></div>
                     <div class="stat-pro sold">
-                        <i class="stat-icon fa-solid fa-hand-holding-dollar"></i>
-                        <span class="stat-number">${soldCount}</span>
+                        <div class="stat-icon"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                        <span class="stat-number">${soldPublications.length}</span>
                         <span class="stat-label">Ventas</span>
                     </div>
                 </div>
 
-                <div class="profile-tabs">
-                    <button class="profile-tab active" data-panel="own">
+                <div class="profile-tabs" role="tablist">
+                    <button class="profile-tab active" data-panel="own" role="tab">
                         <i class="fa-solid fa-box-open"></i> Mis publicaciones
                     </button>
-                    <button class="profile-tab" data-panel="fav">
+                    <button class="profile-tab" data-panel="fav" role="tab">
                         <i class="fa-solid fa-bookmark"></i> Favoritos
+                    </button>
+                    <button class="profile-tab" data-panel="sold" role="tab">
+                        <i class="fa-solid fa-hand-holding-dollar"></i> Ventas
                     </button>
                 </div>
 
@@ -112,10 +130,14 @@
                 <div class="profile-panel" id="panel-fav">
                     <div id="user-favorites-grid" class="products-grid"></div>
                 </div>
+                <div class="profile-panel" id="panel-sold">
+                    <div id="user-sold-grid" class="products-grid"></div>
+                </div>
             `;
 
             renderOwnPublications(ownPublications);
             renderFavoritePublications(favorites);
+            renderSoldPublications(soldPublications);
 
             document.getElementById('btn-change-avatar').addEventListener('click', () => avatarInput.click());
             document.getElementById('btn-open-settings').addEventListener('click', () => openSettings(profile));
@@ -125,8 +147,9 @@
                     document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
                     document.querySelectorAll('.profile-panel').forEach(p => p.classList.remove('active'));
                     tab.classList.add('active');
-                    const panelId = tab.dataset.panel === 'own' ? 'panel-own' : 'panel-fav';
-                    document.getElementById(panelId).classList.add('active');
+                    const panelMap = { own: 'panel-own', fav: 'panel-fav', sold: 'panel-sold' };
+                    const panelId = panelMap[tab.dataset.panel];
+                    if (panelId) document.getElementById(panelId).classList.add('active');
                 });
             });
 
@@ -135,15 +158,18 @@
             profileContent.innerHTML = `
                 <header class="profile-header-pro"><h2>Perfil</h2></header>
                 <div class="login-required">
-                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    <i class="fa-solid fa-triangle-exclamation"></i>
                     <h3>No pudimos cargar tu perfil</h3>
                     <p>Inténtalo de nuevo más tarde.</p>
                 </div>`;
         }
     }
 
+    /* -----------------------------------------------------
+       TARJETA DE PRODUCTO
+       ----------------------------------------------------- */
     function buildCard(pub, options = {}) {
-        const { withActions = false, showSold = false } = options;
+        const { withActions = false } = options;
         const card = document.createElement('article');
         card.className = 'product-card';
         card.dataset.id = pub.id;
@@ -155,27 +181,25 @@
         imgWrap.className = 'product-img';
 
         const img = document.createElement('img');
-        img.src = safeImg; img.alt = pub.name || ''; img.loading = 'lazy';
+        img.src = safeImg;
+        img.alt = pub.name || '';
+        img.loading = 'lazy';
         imgWrap.appendChild(img);
 
-        // Chip de categoría
         if (pub.category) {
-            const chip = DOM.el('span', { class: 'product-category-chip' }, [pub.category]);
-            imgWrap.appendChild(chip);
+            imgWrap.appendChild(DOM.el('span', { class: 'product-category-chip' }, [pub.category]));
         }
-
-        // Badge vendido
         if (isSold) {
-            const soldBadge = DOM.el('span', { class: 'sold-badge' }, [
+            imgWrap.appendChild(DOM.el('span', { class: 'sold-badge' }, [
                 DOM.el('i', { class: 'fa-solid fa-check' }), ' Vendido'
-            ]);
-            imgWrap.appendChild(soldBadge);
+            ]));
         }
 
-        // Favorito
-        const favBtn = DOM.el('button', { class: 'product-favorite', 'data-fav-id': pub.id, 'aria-label': 'Guardar' }, [
-            DOM.el('i', { class: 'fa-regular fa-bookmark' })
-        ]);
+        const favBtn = DOM.el('button', {
+            class: 'product-favorite',
+            'data-fav-id': pub.id,
+            'aria-label': 'Guardar'
+        }, [ DOM.el('i', { class: 'fa-regular fa-bookmark' }) ]);
         imgWrap.appendChild(favBtn);
 
         const info = document.createElement('div');
@@ -191,16 +215,28 @@
 
         if (withActions) {
             const actions = DOM.el('div', { class: 'card-actions' });
-            const editBtn = DOM.el('button', { class: 'btn-edit', 'data-edit-id': pub.id }, ['Editar']);
+
+            const editBtn = DOM.el('button', {
+                class: 'card-action-btn btn-edit',
+                'data-edit-id': pub.id
+            }, [ DOM.el('i', { class: 'fa-solid fa-pen-to-square' }), 'Editar' ]);
             actions.appendChild(editBtn);
+
             if (pub.status === 'active') {
-                const soldBtn = DOM.el('button', { class: 'btn-sold', 'data-sold-id': pub.id }, [
-                    DOM.el('i', { class: 'fa-solid fa-check' }), 'Vendido'
-                ]);
+                const soldBtn = DOM.el('button', {
+                    class: 'card-action-btn btn-sold',
+                    'data-sold-id': pub.id
+                }, [ DOM.el('i', { class: 'fa-solid fa-hand-holding-dollar' }), 'Vendido' ]);
                 actions.appendChild(soldBtn);
             }
-            const delBtn = DOM.el('button', { class: 'btn-delete', 'data-delete-id': pub.id }, ['Eliminar']);
+
+            const delBtn = DOM.el('button', {
+                class: 'card-action-btn btn-delete',
+                'data-delete-id': pub.id,
+                'aria-label': 'Eliminar'
+            }, [ DOM.el('i', { class: 'fa-solid fa-trash' }) ]);
             actions.appendChild(delBtn);
+
             info.appendChild(actions);
         }
 
@@ -215,12 +251,37 @@
         return card;
     }
 
+    /* -----------------------------------------------------
+       RENDER DE PANELES
+       ----------------------------------------------------- */
+    function emptyState({ icon, title, text, actionLabel, actionId }) {
+        const el = DOM.el('div', { class: 'empty-state' });
+        el.innerHTML = `
+            <div class="empty-state-icon"><i class="fa-solid ${icon}"></i></div>
+            <h4>${Formatters.escapeHtml(title)}</h4>
+            <p>${Formatters.escapeHtml(text)}</p>
+            ${actionLabel ? `<button class="empty-action" id="${actionId}">
+                <i class="fa-solid fa-arrow-right"></i> ${Formatters.escapeHtml(actionLabel)}
+            </button>` : ''}
+        `;
+        return el;
+    }
+
     function renderOwnPublications(list) {
         const container = document.getElementById('user-products-grid');
         if (!container) return;
         container.innerHTML = '';
         if (!list.length) {
-            container.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-tertiary);padding:20px;">No has publicado nada todavía.</p>';
+            const empty = emptyState({
+                icon: 'fa-box-open',
+                title: 'Aún no tienes publicaciones',
+                text: 'Publica tu primer producto para empezar a vender.',
+                actionLabel: 'Crear publicación',
+                actionId: 'empty-create-pub'
+            });
+            container.appendChild(empty);
+            const btn = document.getElementById('empty-create-pub');
+            if (btn) btn.addEventListener('click', () => NavigationUI.switchView('anunciarme'));
             return;
         }
         list.forEach(pub => container.appendChild(buildCard(pub, { withActions: true })));
@@ -232,13 +293,41 @@
         if (!container) return;
         container.innerHTML = '';
         if (!list.length) {
-            container.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-tertiary);padding:20px;">Todavía no tienes favoritos.</p>';
+            const empty = emptyState({
+                icon: 'fa-bookmark',
+                title: 'Sin favoritos todavía',
+                text: 'Guarda publicaciones que te interesen para verlas aquí.',
+                actionLabel: 'Explorar',
+                actionId: 'empty-explore-fav'
+            });
+            container.appendChild(empty);
+            const btn = document.getElementById('empty-explore-fav');
+            if (btn) btn.addEventListener('click', () => NavigationUI.switchView('search'));
             return;
         }
         list.forEach(pub => container.appendChild(buildCard(pub)));
         FavoriteUI.updateAllButtons();
     }
 
+    function renderSoldPublications(list) {
+        const container = document.getElementById('user-sold-grid');
+        if (!container) return;
+        container.innerHTML = '';
+        if (!list.length) {
+            container.appendChild(emptyState({
+                icon: 'fa-hand-holding-dollar',
+                title: 'Sin ventas recientes',
+                text: 'Cuando vendas una publicación aparecerá aquí durante 24 horas.'
+            }));
+            return;
+        }
+        list.forEach(pub => container.appendChild(buildCard(pub)));
+        FavoriteUI.updateAllButtons();
+    }
+
+    /* -----------------------------------------------------
+       ACCIONES DE CARD
+       ----------------------------------------------------- */
     function handleProfileClick(e) {
         const editBtn = e.target.closest('.btn-edit');
         if (editBtn) {
@@ -279,6 +368,9 @@
         }
     }
 
+    /* -----------------------------------------------------
+       AVATAR
+       ----------------------------------------------------- */
     async function handleAvatarChange() {
         const file = avatarInput.files[0];
         if (!file) return;
@@ -298,49 +390,69 @@
         }
     }
 
+    /* -----------------------------------------------------
+       AJUSTES — modal agrupado
+       ----------------------------------------------------- */
     function openSettings(profile) {
         const email = profile.email || (AppState.currentUser && AppState.currentUser.email) || '—';
         const list = document.getElementById('settings-list');
-        list.innerHTML = '';
 
         list.innerHTML = `
-            <div class="settings-row">
-                <div class="s-icon"><i class="fa-solid fa-envelope"></i></div>
-                <div class="s-text">
-                    <span class="s-label">Correo electrónico</span>
-                    <span class="s-value">${Formatters.escapeHtml(email)}</span>
+            <div class="settings-group">
+                <span class="settings-group-title">Cuenta</span>
+                <div class="settings-group-card">
+                    <div class="settings-row">
+                        <div class="s-icon tone-coffee"><i class="fa-solid fa-at"></i></div>
+                        <div class="s-text">
+                            <span class="s-label">Username</span>
+                            <span class="s-value">@${Formatters.escapeHtml(profile.username || '')}</span>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <div class="s-icon tone-warm"><i class="fa-solid fa-envelope"></i></div>
+                        <div class="s-text">
+                            <span class="s-label">Correo electrónico</span>
+                            <span class="s-value">${Formatters.escapeHtml(email)}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="settings-row">
-                <div class="s-icon"><i class="fa-solid fa-user"></i></div>
-                <div class="s-text">
-                    <span class="s-label">Username</span>
-                    <span class="s-value">@${Formatters.escapeHtml(profile.username || '')}</span>
+
+            <div class="settings-group">
+                <span class="settings-group-title">Estado</span>
+                <div class="settings-group-card">
+                    <div class="settings-row">
+                        <div class="s-icon tone-green"><i class="fa-solid fa-shield-halved"></i></div>
+                        <div class="s-text">
+                            <span class="s-label">Cuenta</span>
+                            <span class="s-value">Activa</span>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="settings-row">
-                <div class="s-icon"><i class="fa-solid fa-shield-halved"></i></div>
-                <div class="s-text">
-                    <span class="s-label">Cuenta</span>
-                    <span class="s-value">Activa</span>
+
+            <div class="settings-group">
+                <span class="settings-group-title">Sesión</span>
+                <div class="settings-group-card">
+                    <button class="btn-logout-pro" id="btn-logout-pro" type="button">
+                        <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
+                    </button>
                 </div>
-            </div>
-            <div class="settings-row" style="justify-content:center;padding-top:20px;border:none;">
-                <button class="btn-outline" id="btn-logout-pro" style="color:var(--danger-fg);border-color:var(--danger-fg);">
-                    <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
-                </button>
             </div>
         `;
 
-        document.getElementById('btn-logout-pro').addEventListener('click', async () => {
-            try {
-                closeSettings();
-                await AuthService.logout();
-                Toast.success('Sesión cerrada.');
-            } catch (e) {
-                Toast.error('No pudimos cerrar la sesión.');
-            }
-        });
+        const logoutBtn = document.getElementById('btn-logout-pro');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    closeSettings();
+                    await AuthService.logout();
+                    Toast.success('Sesión cerrada.');
+                } catch (e) {
+                    Toast.error('No pudimos cerrar la sesión.');
+                }
+            });
+        }
 
         settingsModal.classList.remove('hidden');
     }
@@ -353,6 +465,9 @@
         return settingsModal && !settingsModal.classList.contains('hidden');
     }
 
+    /* -----------------------------------------------------
+       INIT
+       ----------------------------------------------------- */
     function init() {
         if (initialized) return;
         initialized = true;

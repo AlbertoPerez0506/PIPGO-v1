@@ -252,6 +252,16 @@
 }
 .icon-btn:active { transform: scale(0.94); background: var(--border); }
 
+/* Badge indicador (filtros activos) */
+.icon-badge-dot {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 2px var(--bg);
+}
+
 /* ---------- Section header ---------- */
 .section-header {
     display: flex; justify-content: space-between; align-items: center;
@@ -260,7 +270,7 @@
 .section-header h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
 
 .text-link {
-    background: none; border: none; color: var(--primary);
+    background: none; border: none; color: var(--accent);
     font-weight: 600; font-size: 13px; cursor: pointer;
     display: flex; align-items: center; gap: 4px;
 }
@@ -362,8 +372,6 @@
 
 /* =====================================================
    Responsive
-   Mobile-first: teléfonos como caso base.
-   Tablet: ≥600px. Escritorio: >1024px (centrado).
    ===================================================== */
 @media (min-width: 481px) {
     #app { border-radius: 20px; height: 90vh; }
@@ -372,7 +380,6 @@
     }
 }
 
-/* ---------- Tablet ---------- */
 @media (min-width: 600px) and (max-width: 1024px) {
     #app {
         max-width: 680px;
@@ -392,7 +399,6 @@
     .bottom-nav { max-width: 560px; }
 }
 
-/* ---------- Teléfonos pequeños ---------- */
 @media (max-width: 380px) {
     .hero-title { font-size: 20px; }
     .bottom-nav {

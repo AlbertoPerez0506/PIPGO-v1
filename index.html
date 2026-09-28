@@ -86,7 +86,7 @@
 
             <!-- ============ VISTA: BUSCAR ============ -->
             <section id="view-search" class="view">
-                <header class="search-header-pro">
+                <header class="search-header-pro" id="search-header">
                     <div class="search-header-top">
                         <div>
                             <h2>Explorar</h2>
@@ -94,6 +94,7 @@
                         </div>
                         <button class="icon-btn" id="btn-search-filters" aria-label="Filtros">
                             <i class="fa-solid fa-sliders"></i>
+                            <span class="icon-badge-dot hidden" id="filter-badge"></span>
                         </button>
                     </div>
                     <div class="search-bar-pro">
@@ -363,7 +364,6 @@
                         <p id="sheet-refs"></p>
                     </div>
 
-                    <!-- ============ HORARIO EN DETALLE ============ -->
                     <div class="sheet-schedule-block hidden" id="sheet-schedule-block">
                         <div class="sheet-schedule-icon"><i class="fa-regular fa-clock"></i></div>
                         <div class="sheet-schedule-info">
@@ -492,7 +492,7 @@
 
         <!-- ============ MODAL AJUSTES ============ -->
         <div id="settings-modal" class="modal-backdrop hidden">
-            <div class="auth-modal">
+            <div class="auth-modal settings-modal-pro">
                 <div class="auth-header">
                     <h3>Ajustes</h3>
                     <button class="modal-close" id="settings-close"><i class="fa-solid fa-xmark"></i></button>
