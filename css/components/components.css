@@ -908,11 +908,12 @@
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--border-soft);
-    align-items: center;
+    align-items: stretch;
 }
 
 .card-action-btn {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -924,10 +925,13 @@
     border-radius: 10px;
     border: none;
     cursor: pointer;
-    transition: transform var(--duration-fast) var(--ease-smooth), background var(--duration-fast);
+    transition: transform var(--duration-fast) var(--ease-smooth),
+                background var(--duration-fast) var(--ease-smooth);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.card-action-btn i { font-size: 11px; }
+.card-action-btn i { font-size: 11px; flex-shrink: 0; }
 .card-action-btn:active { transform: scale(0.95); }
 
 .card-action-btn.btn-edit {
@@ -943,13 +947,32 @@
 .card-action-btn.btn-sold:active { background: #EBDCCF; }
 
 .card-action-btn.btn-delete {
+    flex: 0 0 auto;
     background: transparent;
     color: var(--danger-fg);
     border: 1px solid var(--danger-soft);
-    flex: 0 0 auto;
     padding: 9px 12px;
 }
 .card-action-btn.btn-delete:active { background: var(--danger-bg); }
+
+/* =====================================================
+   Móvil: los textos no caben en la card de 2 columnas.
+   Mostramos solo-iconos y repartimos los 3 botones
+   equitativamente. El texto sigue existiendo (span) pero
+   oculto visualmente; aria-label cubre accesibilidad.
+   ===================================================== */
+@media (max-width: 599px) {
+    .card-action-label { display: none; }
+    .card-action-btn {
+        padding: 10px 6px;
+        gap: 0;
+    }
+    .card-action-btn.btn-delete {
+        flex: 1 1 0;
+        padding: 10px 6px;
+    }
+    .card-action-btn i { font-size: 13px; }
+}
 
 /* Botones heredados (compatibilidad) */
 .btn-edit, .btn-delete, .btn-sold {

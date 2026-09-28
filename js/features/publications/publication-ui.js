@@ -34,7 +34,11 @@
     let isSheetOpen = false;
     let isDraggingSheet = false;
     let sheetStartY = 0, sheetCurrentY = 0;
+
+    /* Control de historial de overlays */
     let productSheetHistoryPushed = false;
+    let lightboxHistoryPushed = false;
+    let suppressPopstate = false;
 
     /* Filtros */
     let filterModal, filterClose, filterApply, filterCategory, filterSeller;
@@ -112,9 +116,6 @@
 
     /* =====================================================
        CARD DE PRODUCTO
-       Jerarquía: imagen → chip categoría → favorito →
-       establecimiento → nombre → precio (+ chip horario) →
-       meta (distancia · tiempo)
        ===================================================== */
     function createProductCard(pub) {
         const card = document.createElement('article');
@@ -129,7 +130,6 @@
             ? `<span class="product-store"><i class="fa-solid fa-store"></i> ${Formatters.escapeHtml(pub.storeName)}</span>`
             : '';
 
-        /* Chip de horario (solo si existe) */
         const scheduleLabel = Formatters.formatScheduleCompact(pub.schedule);
         const scheduleChip = scheduleLabel
             ? `<span class="product-schedule-chip" title="${Formatters.escapeHtml(scheduleLabel)}">
@@ -137,7 +137,6 @@
                </span>`
             : '';
 
-        /* Distancia aproximada (si tenemos coords del usuario y de la pub) */
         let distanceHtml = '';
         if (AppState.userCoords && pub.latitude != null && pub.longitude != null) {
             const meters = Formatters.calculateDistance(
@@ -212,7 +211,6 @@
         renderFilterChips();
     }
 
-    /* Sincroniza Home al volver desde Search u otra vista */
     function onEnterHome() {
         renderHomeFilters(AppState.currentPublications);
         const list = AppState.activeCategoryFilter
@@ -230,7 +228,6 @@
         return [...set];
     }
 
-    /* Chips de filtro en Home */
     function renderHomeFilters(publications) {
         const strip = document.getElementById('home-filter-chips');
         if (!strip) return;
@@ -284,7 +281,6 @@
         }
     }
 
-    /* Scroll de categorías en Search */
     function renderCategoriesScroll() {
         const scroll = document.getElementById('search-category-scroll');
         if (!scroll) return;
@@ -337,7 +333,7 @@
     }
 
     /* =====================================================
-       SUGERENCIAS DINÁMICAS (Tendencias en Search)
+       SUGERENCIAS DINÁMICAS
        ===================================================== */
     function renderSearchSuggestions(publications) {
         const suggestions = PublicationService.buildSuggestions(publications);
@@ -437,7 +433,6 @@
         AppState.currentLocation = null;
     }
 
-    /* ---------- Slots de foto ---------- */
     function resetSlot(slot) {
         slot.preview.classList.add('hidden');
         slot.preview.removeAttribute('src');
@@ -495,7 +490,6 @@
         btnClearSchedule.classList.add('hidden');
     }
 
-    /* Lee el horario del form. Devuelve null si no está configurado. */
     function readSchedule() {
         if (schedulePanel.classList.contains('hidden')) return null;
         const days = [...scheduleDays.querySelectorAll('button.active')]
@@ -506,7 +500,6 @@
         return { days, start, end };
     }
 
-    /* Aplica un schedule existente al form (edición) */
     function applyScheduleToForm(schedule) {
         resetSchedule();
         if (!schedule || !schedule.days || !schedule.days.length) return;
@@ -520,7 +513,6 @@
         btnClearSchedule.classList.remove('hidden');
     }
 
-    /* Actualiza estado visual del botón "quitar horario" */
     function updateScheduleVisualState() {
         const hasDays = scheduleDays.querySelectorAll('button.active').length > 0;
         const hasTimes = scheduleStart.value && scheduleEnd.value;
@@ -531,13 +523,11 @@
     /* =====================================================
        UBICACIÓN
        ===================================================== */
-    /* Verifica si hay coords válidas en el estado */
     function hasValidLocation() {
         const loc = AppState.currentLocation;
         return !!(loc && loc.latitude != null && loc.longitude != null);
     }
 
-    /* Aplica una ubicación al input de referencia */
     function applyLocationToInput(location) {
         const display =
             location.shortAddress ||
@@ -546,7 +536,6 @@
         productRefInput.value = display;
     }
 
-    /* Botón "Usar mi ubicación" — misma lógica que el submit automático */
     async function handleGetLocation() {
         if (!AppState.currentUser) { AuthUI.openAuthModal('login'); return; }
         if (btnGetLocation.disabled) return;
@@ -574,16 +563,13 @@
         e.preventDefault();
         hideFormError();
 
-        /* Evitar doble submit */
         if (AppState.isSubmitting) return;
 
-        /* Requiere sesión */
         if (!AppState.currentUser || !auth.currentUser) {
             showFormError('Debes iniciar sesión para publicar.');
             return;
         }
 
-        /* ---------- Leer valores del formulario ---------- */
         const editId = publicationForm.dataset.editId || '';
         const storeName = document.getElementById('store-name').value.trim();
         const name = document.getElementById('product-name').value.trim();
@@ -596,7 +582,6 @@
         const sellerType = typeCalle.classList.contains('selected') ? 'calle' : 'establecimiento';
         const schedule = readSchedule();
 
-        /* ---------- Validaciones con mensajes específicos ---------- */
         const validation = Validators.validatePublication({
             name, price, category,
             mainImage: photoSlots[0].blob || photoSlots[0].uploadedUrl
@@ -613,7 +598,6 @@
         btnSubmit.disabled = true;
 
         try {
-            /* ---------- PASO 1: Asegurar ubicación ---------- */
             let location = AppState.currentLocation;
 
             if (!hasValidLocation()) {
@@ -623,7 +607,6 @@
                     AppState.currentLocation = location;
                     applyLocationToInput(location);
                 } catch (locErr) {
-                    /* No guardamos si no hay ubicación: los datos quedan intactos */
                     showFormError(
                         locErr.message ||
                         'No pudimos obtener tu ubicación. Activa el GPS e inténtalo de nuevo.'
@@ -631,11 +614,9 @@
                     return;
                 }
             } else {
-                /* Ya existe: no volver a pedirla innecesariamente */
                 location = AppState.currentLocation;
             }
 
-            /* ---------- PASO 2: Subir imágenes ---------- */
             let mainUrl = mainSlot.uploadedUrl;
             if (mainSlot.blob) {
                 setSubmitButton('Subiendo imagen…', 'fa-cloud-arrow-up');
@@ -653,7 +634,6 @@
                 }
             }
 
-            /* ---------- PASO 3: Construir payload ---------- */
             const payload = {
                 userId: AppState.currentUser.uid,
                 sellerType,
@@ -663,7 +643,7 @@
                 reference,
                 phone: phone || '',
                 category,
-                schedule: schedule || null,   // opcional (compat con docs viejos)
+                schedule: schedule || null,
                 mainImage: mainUrl,
                 images: imageUrls,
                 latitude: location.latitude,
@@ -675,7 +655,6 @@
                 country: location.country || ''
             };
 
-            /* ---------- PASO 4: Guardar ---------- */
             if (editId) {
                 setSubmitButton('Guardando cambios…', 'fa-floppy-disk');
                 await PublicationService.update(editId, payload);
@@ -686,7 +665,6 @@
                 Toast.success('Publicación creada.');
             }
 
-            /* ---------- PASO 5: Reset + volver a Home ---------- */
             setSubmitButton('Publicado correctamente', 'fa-circle-check');
             resetFormMode();
             AppState.currentLocation = null;
@@ -699,7 +677,6 @@
         } finally {
             AppState.isSubmitting = false;
             btnSubmit.disabled = false;
-            /* Restaurar texto según modo (edit vs new) */
             if (publicationForm.dataset.editId) {
                 setSubmitButton('Guardar cambios', 'fa-floppy-disk');
             } else {
@@ -748,17 +725,14 @@
         if (pub.sellerType === 'calle') typeCalle.classList.add('selected');
         else typeEstablecimiento.classList.add('selected');
 
-        /* Fotos */
         photoSlots.forEach(resetSlot);
         const images = [pub.mainImage, ...(pub.images || [])].filter(Boolean);
         images.forEach((url, index) => {
             if (index < photoSlots.length) setSlotImageFromUrl(photoSlots[index], url);
         });
 
-        /* Horario (compat con publicaciones sin schedule) */
         applyScheduleToForm(pub.schedule || null);
 
-        /* Ubicación */
         AppState.currentLocation = {
             latitude: pub.latitude, longitude: pub.longitude, accuracy: pub.accuracy,
             address: pub.address, city: pub.city, state: pub.state, country: pub.country
@@ -788,7 +762,6 @@
         sheetTime.innerHTML = `<i class="fa-solid fa-clock"></i> ${Formatters.formatRelativeTime(product.createdAt)}`;
         sheetDesc.textContent = product.description || 'Sin descripción.';
 
-        /* Referencias extra */
         if (product.extraRefs && product.extraRefs.trim()) {
             sheetRefsBlock.classList.remove('hidden');
             sheetRefs.textContent = product.extraRefs;
@@ -796,7 +769,6 @@
             sheetRefsBlock.classList.add('hidden');
         }
 
-        /* Ubicación + distancia */
         const baseRef = product.address || product.reference || 'Sin referencia';
         let refText = baseRef;
         if (AppState.userCoords && product.latitude != null && product.longitude != null) {
@@ -809,7 +781,6 @@
         }
         sheetRef.textContent = refText;
 
-        /* Contacto */
         if (product.phone && product.phone.trim()) {
             sheetContactRow.classList.remove('hidden');
             sheetPhone.textContent = product.phone;
@@ -818,7 +789,6 @@
             sheetContactRow.classList.add('hidden');
         }
 
-        /* Horario (opcional) */
         const scheduleFull = Formatters.formatScheduleFull(product.schedule);
         if (scheduleFull) {
             sheetScheduleBlock.classList.remove('hidden');
@@ -827,7 +797,6 @@
             sheetScheduleBlock.classList.add('hidden');
         }
 
-        /* Galería */
         const allImages = [product.mainImage, ...(product.images || [])].filter(Boolean);
         buildGallery(allImages);
 
@@ -845,6 +814,11 @@
         }
     }
 
+    /**
+     * @param {boolean} syncHistory  true = cerramos manualmente (botón X, backdrop)
+     *                               y hay que quitar el estado del historial.
+     *                               false = lo cierra el popstate (ya estamos en el estado previo).
+     */
     function closeProductSheet(syncHistory = true) {
         sheetBackdrop.classList.remove('open');
         isSheetOpen = false;
@@ -854,6 +828,7 @@
         if (productSheetHistoryPushed) {
             productSheetHistoryPushed = false;
             if (syncHistory) {
+                suppressPopstate = true;
                 try { history.back(); } catch (e) { /* noop */ }
             }
         }
@@ -915,7 +890,6 @@
         });
     }
 
-    /* Swipe de la galería dentro del sheet */
     let galStartX = 0, galCurX = 0, galSwiping = false;
     function handleGalleryPointerDown(e) {
         if (e.pointerType !== 'touch') return;
@@ -972,9 +946,17 @@
         lightbox.classList.remove('hidden');
         goToLightbox(index, false);
         document.body.style.overflow = 'hidden';
+
+        if (!lightboxHistoryPushed) {
+            history.pushState(
+                { view: AppState.currentView, overlay: 'lightbox' },
+                '', ''
+            );
+            lightboxHistoryPushed = true;
+        }
     }
 
-    function closeLightbox() {
+    function closeLightbox(syncHistory = true) {
         lightbox.classList.add('hidden');
         lightboxTrack.innerHTML = '';
         lightboxDots.innerHTML = '';
@@ -982,6 +964,14 @@
         lbCurrentScale = 1;
         if (isSheetOpen) document.body.style.overflow = 'hidden';
         else document.body.style.overflow = '';
+
+        if (lightboxHistoryPushed) {
+            lightboxHistoryPushed = false;
+            if (syncHistory) {
+                suppressPopstate = true;
+                try { history.back(); } catch (e) { /* noop */ }
+            }
+        }
     }
 
     function isLightboxOpen() {
@@ -1114,7 +1104,6 @@
         if (initialized) return;
         initialized = true;
 
-        /* Referencias DOM */
         publicationForm = document.getElementById('publication-form');
         stepType = document.getElementById('step-type');
         typeCalle = document.getElementById('type-calle');
@@ -1159,7 +1148,6 @@
         sheetMapLink = document.getElementById('sheet-map-link');
         btnChatV2 = document.getElementById('btn-chat-v2');
 
-        /* Horario */
         scheduleToggle = document.getElementById('schedule-toggle');
         schedulePanel = document.getElementById('schedule-panel');
         scheduleDays = document.getElementById('schedule-days');
@@ -1174,7 +1162,6 @@
         lightboxCounter = document.getElementById('lightbox-counter');
         lightboxDots = document.getElementById('lightbox-dots');
 
-        /* Slots de foto */
         photoSlots = [
             { slot: document.getElementById('photo-slot-main'), input: document.getElementById('photo-input-main'), preview: document.getElementById('photo-preview-main'), removeBtn: document.querySelector('[data-preview="photo-preview-main"]'), blob: null, previewUrl: null, uploadedUrl: '' },
             { slot: document.getElementById('photo-slot-2'), input: document.getElementById('photo-input-2'), preview: document.getElementById('photo-preview-2'), removeBtn: document.querySelector('[data-preview="photo-preview-2"]'), blob: null, previewUrl: null, uploadedUrl: '' },
@@ -1183,25 +1170,21 @@
             { slot: document.getElementById('photo-slot-5'), input: document.getElementById('photo-input-5'), preview: document.getElementById('photo-preview-5'), removeBtn: document.querySelector('[data-preview="photo-preview-5"]'), blob: null, previewUrl: null, uploadedUrl: '' }
         ];
 
-        /* Filtros */
         filterModal = document.getElementById('filter-modal');
         filterClose = document.getElementById('filter-close');
         filterApply = document.getElementById('filter-apply');
         filterCategory = document.getElementById('filter-category');
         filterSeller = document.getElementById('filter-seller');
 
-        /* Precio: solo dígitos + punto */
         const priceInput = document.getElementById('product-price');
         priceInput.addEventListener('input', (e) => {
             e.target.value = Formatters.sanitizePriceInput(e.target.value);
         });
 
-        /* Tipo de vendedor */
         typeCalle.addEventListener('click', () => selectSellerType(typeCalle));
         typeEstablecimiento.addEventListener('click', () => selectSellerType(typeEstablecimiento));
         btnBackType.addEventListener('click', resetFormMode);
 
-        /* Slots de foto */
         photoSlots.forEach(slot => {
             slot.slot.addEventListener('click', () => { if (!slot.uploadedUrl) slot.input.click(); });
             slot.input.addEventListener('change', e => {
@@ -1211,7 +1194,6 @@
             slot.removeBtn.addEventListener('click', e => { e.stopPropagation(); resetSlot(slot); });
         });
 
-        /* Horario */
         scheduleToggle.addEventListener('click', () => {
             const willOpen = schedulePanel.classList.contains('hidden');
             setSchedulePanelOpen(willOpen);
@@ -1229,13 +1211,9 @@
             setSchedulePanelOpen(false);
         });
 
-        /* Ubicación */
         btnGetLocation.addEventListener('click', handleGetLocation);
-
-        /* Submit */
         publicationForm.addEventListener('submit', handleSubmit);
 
-        /* Búsqueda */
         searchInput.addEventListener('input', handleSearchInput);
         clearSearch.addEventListener('click', () => {
             searchInput.value = '';
@@ -1244,13 +1222,11 @@
             handleSearchInput();
         });
 
-        /* Filtros modal */
         const btnFilters = document.getElementById('btn-search-filters');
         if (btnFilters) btnFilters.addEventListener('click', openFilterModal);
         if (filterClose) filterClose.addEventListener('click', closeFilterModal);
         if (filterApply) filterApply.addEventListener('click', applyFilters);
 
-        /* Sheet: galería, drag, links */
         galleryClose.addEventListener('click', () => closeProductSheet());
         galleryPrev.addEventListener('click', (e) => { e.stopPropagation(); goToGallerySlide(currentGalleryIndex - 1); });
         galleryNext.addEventListener('click', (e) => { e.stopPropagation(); goToGallerySlide(currentGalleryIndex + 1); });
@@ -1272,8 +1248,7 @@
             Toast.info('Los mensajes directos llegarán en la V2.');
         });
 
-        /* Lightbox */
-        lightboxClose.addEventListener('click', closeLightbox);
+        lightboxClose.addEventListener('click', () => closeLightbox());
         lightbox.addEventListener('click', (e) => {
             if (e.target === lightbox) closeLightbox();
         });
@@ -1305,6 +1280,14 @@
         isProductSheetOpen: () => isSheetOpen,
         isLightboxOpen,
         isFilterModalOpen,
-        closeFilterModal
+        closeFilterModal,
+        /* Usado por NavigationUI para no reaccionar a popstates propios */
+        consumeSuppressPopstate: () => {
+            if (suppressPopstate) {
+                suppressPopstate = false;
+                return true;
+            }
+            return false;
+        }
     };
 })();

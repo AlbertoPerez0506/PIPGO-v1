@@ -48,7 +48,7 @@
             return true;
         }
         if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
-            PublicationUI.closeLightbox();
+            PublicationUI.closeLightbox(true);
             return true;
         }
         if (AuthUI.isAuthModalOpen && AuthUI.isAuthModalOpen()) {
@@ -66,14 +66,16 @@
         return false;
     }
 
+    /* Botón atrás nativo (Cordova / Android hardware) */
     function onBackButton(e) {
         if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
-            e.preventDefault(); PublicationUI.closeLightbox(); return;
+            e.preventDefault();
+            PublicationUI.closeLightbox();   // syncHistory=true → hace history.back() con supresión
+            return;
         }
         if (PublicationUI.isProductSheetOpen && PublicationUI.isProductSheetOpen()) {
             e.preventDefault();
-            PublicationUI.closeProductSheet(false);
-            history.back();
+            PublicationUI.closeProductSheet(); // syncHistory=true → idem
             return;
         }
         if (closeAllOverlays()) { e.preventDefault(); return; }
@@ -81,7 +83,26 @@
         if (window.cordova && navigator.app) { e.preventDefault(); navigator.app.exitApp(); }
     }
 
+    /* Popstate: gesto back (iOS/Android moderno) y history.back() propio */
     function handlePopState(event) {
+        // 1) Si el popstate lo disparamos nosotros (cierre manual de overlay),
+        //    lo ignoramos para no cerrar otros overlays por error.
+        if (PublicationUI.consumeSuppressPopstate && PublicationUI.consumeSuppressPopstate()) {
+            return;
+        }
+
+        // 2) Overlays tienen prioridad sobre el cambio de vista.
+        //    Cerramos sin llamar a history.back() (ya estamos en el estado previo).
+        if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
+            PublicationUI.closeLightbox(false);
+            return;
+        }
+        if (PublicationUI.isProductSheetOpen && PublicationUI.isProductSheetOpen()) {
+            PublicationUI.closeProductSheet(false);
+            return;
+        }
+
+        // 3) Navegación normal entre vistas
         const view = event.state && event.state.view;
         if (!view) {
             navigationStack = ['home'];

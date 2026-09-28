@@ -1,13 +1,3 @@
-/* =====================================================
-   PIPGO · PROFILE UI
-   Perfil rediseñado con tabs (Publicaciones / Favoritos /
-   Ventas), modal de ajustes agrupado y edición de avatar
-   como botón flotante.
-   Layout inspirado en referencia: título + username a la
-   izquierda, avatar protagonista a la derecha, stats con
-   jerarquía número → etiqueta.
-   ===================================================== */
-
 (function () {
     let profileContent, avatarInput;
     let ownPublications = [];
@@ -241,20 +231,31 @@
         if (withActions) {
             const actions = DOM.el('div', { class: 'card-actions' });
 
+            // Editar: icono + label (el label se oculta en móvil vía CSS)
             const editBtn = DOM.el('button', {
                 class: 'card-action-btn btn-edit',
-                'data-edit-id': pub.id
-            }, [ DOM.el('i', { class: 'fa-solid fa-pen-to-square' }), 'Editar' ]);
+                'data-edit-id': pub.id,
+                'aria-label': 'Editar'
+            }, [
+                DOM.el('i', { class: 'fa-solid fa-pen-to-square' }),
+                DOM.el('span', { class: 'card-action-label' }, ['Editar'])
+            ]);
             actions.appendChild(editBtn);
 
+            // Vendido: icono + label (solo si está activa)
             if (pub.status === 'active') {
                 const soldBtn = DOM.el('button', {
                     class: 'card-action-btn btn-sold',
-                    'data-sold-id': pub.id
-                }, [ DOM.el('i', { class: 'fa-solid fa-hand-holding-dollar' }), 'Vendido' ]);
+                    'data-sold-id': pub.id,
+                    'aria-label': 'Marcar como vendido'
+                }, [
+                    DOM.el('i', { class: 'fa-solid fa-hand-holding-dollar' }),
+                    DOM.el('span', { class: 'card-action-label' }, ['Vendido'])
+                ]);
                 actions.appendChild(soldBtn);
             }
 
+            // Eliminar: solo icono siempre (con aria-label)
             const delBtn = DOM.el('button', {
                 class: 'card-action-btn btn-delete',
                 'data-delete-id': pub.id,
