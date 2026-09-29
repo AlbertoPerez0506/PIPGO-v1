@@ -8,6 +8,9 @@
 @import url('./core/base.css');
 @import url('./layout/layout.css');
 @import url('./components/components.css');
+@import url('./components/settings-extras.css');
+@import url('./components/connectivity.css');
+@import url('./components/skeletons.css');
 @import url('./pages/pages.css');
 @import url('./pages/seller.css');
 @import url('./pages/admin.css');

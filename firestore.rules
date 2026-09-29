@@ -3,6 +3,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ============================================================
+    // HELPERS DE IDENTIDAD
+    // ============================================================
     function signedIn() {
       return request.auth != null;
     }
@@ -11,9 +14,12 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    // Admin único validado por email.
+    // Coincide con CONFIG.ADMIN_EMAIL en js/config/config.js
+    // y con AdminService.ADMIN_EMAIL en js/services/admin-service.js
     function isAdmin() {
       return signedIn()
-        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.admin == true;
+        && request.auth.token.email == 'ivanalbertoperezramirez@gmail.com';
     }
 
     function isApprovedSeller(uid) {
@@ -22,6 +28,20 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/usuarios/$(uid)).data.active == true
         && get(/databases/$(database)/documents/usuarios/$(uid)).data.role == "seller"
         && get(/databases/$(database)/documents/usuarios/$(uid)).data.sellerStatus == "approved";
+    }
+
+    function validUsername(u) {
+      return u is string
+        && u.size() >= 3
+        && u.size() <= 20
+        && u.matches('^[a-zA-Z0-9._]+$');
+    }
+
+    function usernameNormalizedMatches(u, n) {
+      return n is string
+        && n.size() >= 3
+        && n.size() <= 20
+        && n == u.lower();
     }
 
     // ============================================================
@@ -37,10 +57,11 @@ service cloud.firestore {
         && request.resource.data.sellerStatus == "none"
         && request.resource.data.active == true
         && request.resource.data.admin == false
-        && request.resource.data.username is string
-        && request.resource.data.username.size() >= 3
-        && request.resource.data.username.size() <= 20
-        && request.resource.data.usernameNormalized is string
+        && validUsername(request.resource.data.username)
+        && usernameNormalizedMatches(
+             request.resource.data.username,
+             request.resource.data.usernameNormalized
+           )
         && request.resource.data.email is string
         && request.resource.data.avatarUrl is string
         && request.resource.data.createdAt is timestamp
@@ -50,20 +71,26 @@ service cloud.firestore {
         || (
           isOwner(uid)
           && request.resource.data.uid == resource.data.uid
-          && request.resource.data.username == resource.data.username
-          && request.resource.data.usernameNormalized == resource.data.usernameNormalized
           && request.resource.data.email == resource.data.email
           && request.resource.data.role == resource.data.role
           && request.resource.data.active == resource.data.active
           && request.resource.data.admin == resource.data.admin
           && request.resource.data.createdAt == resource.data.createdAt
+          && validUsername(request.resource.data.username)
+          && usernameNormalizedMatches(
+               request.resource.data.username,
+               request.resource.data.usernameNormalized
+             )
           && (
             request.resource.data.sellerStatus == resource.data.sellerStatus
-            || (resource.data.sellerStatus in ["none","rejected"]
+            || (resource.data.sellerStatus in ["none","rejected","needs_info"]
                 && request.resource.data.sellerStatus == "pending")
           )
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(["avatarUrl","updatedAt","sellerStatus"])
+               .hasOnly([
+                 "avatarUrl","updatedAt","sellerStatus",
+                 "username","usernameNormalized"
+               ])
         );
 
       allow delete: if false;
@@ -78,33 +105,46 @@ service cloud.firestore {
 
       allow create: if isOwner(uid)
         && request.resource.data.uid == uid
-        && request.resource.data.username is string
-        && request.resource.data.usernameNormalized is string
+        && validUsername(request.resource.data.username)
+        && usernameNormalizedMatches(
+             request.resource.data.username,
+             request.resource.data.usernameNormalized
+           )
         && request.resource.data.avatarUrl is string;
 
       allow update: if isAdmin()
         || (
           isOwner(uid)
           && request.resource.data.uid == resource.data.uid
-          && request.resource.data.username == resource.data.username
-          && request.resource.data.usernameNormalized == resource.data.usernameNormalized
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["avatarUrl"])
+          && validUsername(request.resource.data.username)
+          && usernameNormalizedMatches(
+               request.resource.data.username,
+               request.resource.data.usernameNormalized
+             )
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(["avatarUrl","username","usernameNormalized"])
         );
 
       allow delete: if false;
     }
 
     // ============================================================
-    // USERNAMES
+    // USERNAMES (índice de unicidad)
     // ============================================================
     match /usernames/{normalized} {
+
       allow read: if true;
+
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.uid is string
-        && request.resource.data.username is string
+        && validUsername(request.resource.data.username)
         && request.resource.data.createdAt is timestamp;
-      allow update, delete: if false;
+
+      allow update: if false;
+
+      allow delete: if signedIn()
+        && resource.data.uid == request.auth.uid;
     }
 
     // ============================================================
@@ -157,13 +197,37 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (
           isOwner(uid)
-          && resource.data.status in ["pending", "rejected"]
-          && request.resource.data.status in ["pending", "rejected"]
+          && resource.data.status in ["pending", "rejected", "needs_info"]
+          && request.resource.data.status in ["pending", "rejected", "needs_info"]
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.termsAccepted == true
+          && request.resource.data.sellerType in ["person", "business"]
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() >= 2
+          && request.resource.data.displayName.size() <= 100
+          && request.resource.data.businessName is string
+          && request.resource.data.category is string
+          && request.resource.data.category.size() <= 80
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 1000
+          && request.resource.data.phone is string
+          && request.resource.data.phone.size() <= 30
+          && request.resource.data.city is string
+          && request.resource.data.state is string
+          && request.resource.data.socialUrl is string
+          && request.resource.data.contactMethod in ["phone", "whatsapp"]
+          && request.resource.data.submittedAt is timestamp
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.reviewedAt == null
+          && request.resource.data.reviewedBy == null
+          && request.resource.data.rejectionReason == null
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly([
                  "sellerType","displayName","businessName","category",
                  "description","phone","city","state","socialUrl",
-                 "contactMethod","termsAccepted","status","updatedAt"
+                 "contactMethod","termsAccepted","status",
+                 "submittedAt","updatedAt",
+                 "reviewedAt","reviewedBy","rejectionReason","adminNote"
                ])
         );
 
@@ -198,6 +262,15 @@ service cloud.firestore {
         && request.resource.data.images is list
         && request.resource.data.storeName is string
         && request.resource.data.phone is string
+        && (!('hasWhatsapp' in request.resource.data)
+            || request.resource.data.hasWhatsapp is bool)
+        && (!('unitCode' in request.resource.data)
+            || request.resource.data.unitCode is string)
+        && (!('condition' in request.resource.data)
+            || request.resource.data.condition is string)
+        && (!('presentation' in request.resource.data)
+            || request.resource.data.presentation == null
+            || request.resource.data.presentation is map)
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.soldAt == null;
@@ -206,6 +279,8 @@ service cloud.firestore {
         && request.auth.uid == resource.data.userId
         && request.resource.data.userId == resource.data.userId
         && request.resource.data.createdAt == resource.data.createdAt
+        && (!('hasWhatsapp' in request.resource.data)
+            || request.resource.data.hasWhatsapp is bool)
         && (
           (resource.data.status == "active"
             && request.resource.data.status in ["active", "sold", "deleted"])
@@ -226,7 +301,7 @@ service cloud.firestore {
     }
 
     // ============================================================
-    // CONVERSACIONES (preparadas para V2)
+    // CONVERSACIONES (V2)
     // ============================================================
     match /conversaciones/{conversationId} {
 

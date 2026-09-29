@@ -2,6 +2,8 @@
    PIPGO · ADMIN UI
    Renderiza el panel, tarjetas, modales y confirmaciones.
    No contiene lógica Firestore: eso vive en AdminService.
+   Regla visual PipGo: nada de emojis ni símbolos Unicode
+   decorativos. Todo estado usa Font Awesome.
    ===================================================== */
 
 (function () {
@@ -31,29 +33,38 @@
             case 'approved':   return 'Aprobado';
             case 'rejected':   return 'Rechazado';
             case 'needs_info': return 'Información requerida';
+            case 'suspended':  return 'Suspendido';
             default:            return s || '—';
         }
     }
 
     function statusClass(s) { return 'status-' + (s || 'none'); }
 
-    function statusEmoji(s) {
+    /* Icono Font Awesome por estado. Reemplaza al antiguo statusEmoji. */
+    function statusIcon(s) {
         switch (s) {
-            case 'pending':    return '🟡';
-            case 'approved':   return '🟢';
-            case 'rejected':   return '🔴';
-            case 'needs_info': return '🟠';
-            default:            return '⚪';
+            case 'pending':    return 'fa-hourglass-half';
+            case 'approved':   return 'fa-circle-check';
+            case 'rejected':   return 'fa-circle-xmark';
+            case 'needs_info': return 'fa-circle-info';
+            case 'suspended':  return 'fa-ban';
+            default:            return 'fa-circle';
         }
     }
 
-    function roleLabel(role, sellerStatus) {
-        if (role === 'seller' && sellerStatus === 'approved') return '🟢 Vendedor aprobado';
-        if (sellerStatus === 'pending')     return '🟡 Vendedor en revisión';
-        if (sellerStatus === 'needs_info')  return '🟠 Requiere información';
-        if (sellerStatus === 'rejected')    return '🔴 Solicitud rechazada';
-        if (sellerStatus === 'suspended')   return '⚫ Suspendido';
-        return '⚪ Usuario';
+    /* Icono + texto de rol, sin emojis. Devuelve HTML seguro. */
+    function roleLabelHtml(role, sellerStatus) {
+        const build = (icon, label) =>
+            `<i class="fa-solid ${icon}" aria-hidden="true"></i> ${Formatters.escapeHtml(label)}`;
+
+        if (role === 'seller' && sellerStatus === 'approved') {
+            return build('fa-circle-check', 'Vendedor aprobado');
+        }
+        if (sellerStatus === 'pending')    return build('fa-hourglass-half', 'Vendedor en revisión');
+        if (sellerStatus === 'needs_info') return build('fa-circle-info',    'Requiere información');
+        if (sellerStatus === 'rejected')   return build('fa-circle-xmark',   'Solicitud rechazada');
+        if (sellerStatus === 'suspended')  return build('fa-ban',            'Suspendido');
+        return build('fa-user', 'Usuario');
     }
 
     function formatDate(ts) {
@@ -62,7 +73,6 @@
         return d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
-    /* Traduce errores Firestore a algo legible para el admin */
     function describeAdminError(e) {
         const code = e && e.code;
         if (code === 'permission-denied') {
@@ -174,7 +184,8 @@
                     </div>
                     <div class="admin-app-head-right">
                         <span class="admin-status-pill ${statusClass(app.status)}">
-                            ${statusEmoji(app.status)} ${statusLabel(app.status)}
+                            <i class="fa-solid ${statusIcon(app.status)}" aria-hidden="true"></i>
+                            ${Formatters.escapeHtml(statusLabel(app.status))}
                         </span>
                         <i class="fa-solid fa-chevron-down admin-chevron"></i>
                     </div>
@@ -324,14 +335,14 @@
             .forEach(u => {
                 const email = u.email || '—';
                 const username = u.username ? '@' + u.username : '';
-                const badge = roleLabel(u.role, u.sellerStatus);
+                const badgeHtml = roleLabelHtml(u.role, u.sellerStatus);
                 list.appendChild(el(`
                     <div class="admin-user-row">
                         <div class="admin-user-info">
                             <span class="admin-user-name">${Formatters.escapeHtml(username || email)}</span>
                             <span class="admin-user-email">${Formatters.escapeHtml(email)}</span>
                         </div>
-                        <span class="admin-user-badge">${badge}</span>
+                        <span class="admin-user-badge">${badgeHtml}</span>
                     </div>`));
             });
     }
@@ -454,10 +465,7 @@
        ENTRAR AL PANEL
        ===================================================== */
     function onEnterAdmin() {
-        // Guard contra race: si el auth observer aún no ha terminado,
-        // AppState.currentUser puede ser null momentáneamente.
         if (!AppState.currentUser) {
-            // Reintentamos en el siguiente tick (ya con el observer resuelto).
             setTimeout(() => {
                 if (!AppState.currentUser || !AdminService.isAdmin()) {
                     Toast.error('No tienes permisos para acceder.');

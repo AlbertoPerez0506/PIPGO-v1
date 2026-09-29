@@ -1,10 +1,12 @@
 /* =====================================================
    PIPGO · PUBLICATION SERVICE
-   CRUD de publicaciones. Sin lógica de UI.
+   CRUD de publicaciones + suscripción realtime.
+   Sin lógica de UI.
    Soporta status: 'active' | 'sold' | 'deleted'
    ===================================================== */
 
 window.PublicationService = {
+
     async create(data) {
         return await db.collection(CONFIG.COLLECTIONS.PUBLICATIONS).add({
             ...data,
@@ -24,6 +26,36 @@ window.PublicationService = {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
 
+    subscribeActivePublications(onChange, onError) {
+        const query = db.collection(CONFIG.COLLECTIONS.PUBLICATIONS)
+            .where('status', '==', 'active')
+            .orderBy('createdAt', 'desc')
+            .limit(60);
+
+        const unsubscribe = query.onSnapshot(
+            (snapshot) => {
+                const changes = { added: [], modified: [], removed: [] };
+                snapshot.docChanges().forEach(change => {
+                    const data = { id: change.doc.id, ...change.doc.data() };
+                    if (change.type === 'added')         changes.added.push(data);
+                    else if (change.type === 'modified') changes.modified.push(data);
+                    else if (change.type === 'removed')  changes.removed.push(data);
+                });
+                try {
+                    onChange(changes, snapshot);
+                } catch (e) {
+                    if (window.Logger) Logger.error('subscribeActivePublications onChange falló', e);
+                }
+            },
+            (error) => {
+                if (window.Logger) Logger.error('subscribeActivePublications error', error);
+                if (onError) onError(error);
+            }
+        );
+
+        return unsubscribe;
+    },
+
     async getUserPublications(uid) {
         const snapshot = await db.collection(CONFIG.COLLECTIONS.PUBLICATIONS)
             .where('userId', '==', uid)
@@ -34,7 +66,6 @@ window.PublicationService = {
             .filter(pub => {
                 if (pub.status === 'deleted') return false;
                 if (pub.status === 'sold' && pub.soldAt) {
-                    // Mostrar solo si fue vendido hace menos de 24h
                     const soldMs = pub.soldAt.toDate ? pub.soldAt.toDate().getTime() : new Date(pub.soldAt).getTime();
                     return (Date.now() - soldMs) < 24 * 60 * 60 * 1000;
                 }
@@ -72,7 +103,6 @@ window.PublicationService = {
         });
     },
 
-    /* Extrae sugerencias dinámicas (productos + categorías + tiendas) */
     buildSuggestions(publications) {
         const counter = new Map();
         const add = (val) => {

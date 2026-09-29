@@ -1,7 +1,9 @@
 /* =====================================================
    PIPGO · PUBLICATION UI
-   Home, Search, Form (crear/editar), Sheet, Lightbox,
-   Horario opcional y flujo robusto de ubicación.
+   Home (realtime), Search, Form (crear/editar), Sheet,
+   Lightbox, WhatsApp, unidades, condición, presentación,
+   contador, vista previa, borrador, protección de salida,
+   empty states inteligentes, skeletons y haptics.
    ===================================================== */
 
 (function () {
@@ -17,9 +19,24 @@
     let sheetDragZone, galleryTrack, galleryDots, galleryClose, galleryPrev, galleryNext;
     let sheetCategory, sheetName, sheetStore, sheetPrice, sheetTime, sheetDesc;
     let sheetRefsBlock, sheetRefs, sheetRef;
-    let sheetContactRow, sheetPhone, sheetCall;
-    let sheetScheduleBlock, sheetScheduleText;
+    let sheetContactRow, sheetPhone, sheetCall, sheetWhatsapp;
+    let sheetScheduleBlock, sheetScheduleText, sheetBadgesRow;
     let btnDirections, sheetMapLink, btnChatV2;
+
+    let productHasWhatsappInput;
+
+    let productCategorySelect;
+    let unitGroup, productUnitSelect, unitHint;
+    let conditionGroup, conditionChips;
+    let presentationGroup, productPresentationQty, productPresentationUnit;
+    let descriptionInput, descriptionCounter;
+
+    let previewModal, previewClose, previewBody, previewBack, previewPublish, btnPreview;
+
+    let homeNewBanner, homeNewBannerText;
+
+    let draftModal, draftContinueBtn, draftDiscardBtn, draftCloseBtn;
+    let unsavedModal;
 
     /* Horario (form) */
     let scheduleToggle, schedulePanel, scheduleDays, scheduleStart, scheduleEnd;
@@ -38,6 +55,7 @@
     /* Control de historial de overlays */
     let productSheetHistoryPushed = false;
     let lightboxHistoryPushed = false;
+    let previewHistoryPushed = false;
     let suppressPopstate = false;
 
     /* Filtros */
@@ -52,6 +70,20 @@
     let lbPointers = new Map();
     let lbPinchStart = 0, lbPinchScale = 1, lbCurrentScale = 1, lbActiveImg = null;
 
+    /* Realtime Home */
+    let homeUnsubscribe = null;
+    let homeFirstSnapshotHandled = false;
+    let pendingHomePublications = [];
+
+    /* Búsqueda */
+    let searchDebounceTimer = null;
+    const SEARCH_DEBOUNCE_MS = 180;
+
+    /* Borrador */
+    const DRAFT_KEY = 'publication_draft';
+    const DRAFT_SAVE_DELAY = 400;
+    let draftSaveTimeout = null;
+
     let initialized = false;
 
     /* =====================================================
@@ -60,16 +92,38 @@
     function showFormError(message) {
         formError.textContent = message;
         formError.classList.remove('hidden');
+        try { formError.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
     }
     function hideFormError() { formError.classList.add('hidden'); }
 
-    /* Cambia texto + icono del botón submit sin tocar el estado disabled */
     function setSubmitButton(text, iconClass) {
         btnSubmitText.textContent = text;
         if (iconClass) {
             const icon = btnSubmit.querySelector('i');
             if (icon) icon.className = `fa-solid ${iconClass}`;
         }
+    }
+
+    function fillSelectWithUnits(select, units, { emptyOption = false } = {}) {
+        select.innerHTML = '';
+        if (emptyOption) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Sin unidad';
+            select.appendChild(opt);
+        }
+        units.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.code;
+            opt.textContent = u.label;
+            select.appendChild(opt);
+        });
+    }
+
+    function sortByCreatedAtDesc(a, b) {
+        const ta = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
+        const tb = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
+        return tb - ta;
     }
 
     /* =====================================================
@@ -87,11 +141,10 @@
         }
     }
 
-        function renderLoginRequiredState() {
+    function renderLoginRequiredState() {
         const container = document.getElementById('login-required');
         if (!container) return;
 
-        /* Sin sesión */
         if (!window.PermissionService || !PermissionService.isAuthenticated()) {
             container.innerHTML = `
                 <i class="fa-solid fa-user-lock"></i>
@@ -146,7 +199,6 @@
             return;
         }
 
-        /* role=user, sellerStatus=none */
         container.innerHTML = `
             <i class="fa-solid fa-store"></i>
             <h3>Conviértete en vendedor</h3>
@@ -157,32 +209,204 @@
     }
 
     /* =====================================================
+       SKELETONS
+       ===================================================== */
+    function renderSkeletons(container, count = 6) {
+        if (!container) return;
+        container.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const sk = document.createElement('div');
+            sk.className = 'skeleton-card';
+            sk.innerHTML = `
+                <div class="skeleton-img"></div>
+                <div class="skeleton-info">
+                    <div class="skeleton-line w-60"></div>
+                    <div class="skeleton-line w-80"></div>
+                    <div class="skeleton-line w-40"></div>
+                </div>`;
+            container.appendChild(sk);
+        }
+    }
+
+    /* =====================================================
        CARGA DE PUBLICACIONES
        ===================================================== */
     async function loadPublications() {
-        productsGrid.innerHTML = '<p style="text-align:center;padding:30px;color:var(--text-tertiary);">Cargando…</p>';
+        if (AppState.currentView === 'home') {
+            startHomeSubscription();
+            return;
+        }
+
         try {
+            if (!AppState.currentPublications.length) {
+                renderSkeletons(productsGrid, 6);
+            }
+
             AppState.currentPublications = await PublicationService.getActivePublications();
-
-            const homeList = AppState.activeCategoryFilter
-                ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
-                : AppState.currentPublications;
-            renderProducts(productsGrid, homeList);
-
             renderHomeFilters(AppState.currentPublications);
             renderSearchSuggestions(AppState.currentPublications);
 
             if (AppState.currentView === 'search') {
                 renderSearchResults(getFilteredList());
+            } else {
+                const homeList = AppState.activeCategoryFilter
+                    ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
+                    : AppState.currentPublications;
+                renderProducts(productsGrid, homeList);
             }
         } catch (error) {
             Logger.error('Error cargando publicaciones', error);
-            productsGrid.innerHTML = `
-                <div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-tertiary);">
-                    <i class="fa-solid fa-cloud-exclamation" style="font-size:32px;display:block;margin-bottom:12px;"></i>
-                    <p style="font-size:14px;">No pudimos cargar las publicaciones.</p>
-                </div>`;
+            if (productsGrid) {
+                productsGrid.innerHTML = `
+                    <div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-tertiary);">
+                        <i class="fa-solid fa-cloud-exclamation" style="font-size:32px;display:block;margin-bottom:12px;"></i>
+                        <p style="font-size:14px;">No pudimos cargar las publicaciones.</p>
+                    </div>`;
+            }
         }
+    }
+
+    /* =====================================================
+       TIEMPO REAL — HOME
+       ===================================================== */
+    function startHomeSubscription() {
+        if (homeUnsubscribe) return;
+
+        if (!AppState.currentPublications.length) {
+            renderSkeletons(productsGrid, 6);
+        }
+
+        homeFirstSnapshotHandled = false;
+
+        homeUnsubscribe = PublicationService.subscribeActivePublications(
+            (changes, snapshot) => handleHomeSnapshot(changes, snapshot),
+            (error) => {
+                Logger.error('Realtime Home error', error);
+                homeUnsubscribe = null;
+                (async () => {
+                    try {
+                        AppState.currentPublications = await PublicationService.getActivePublications();
+                        rerenderHome();
+                        renderHomeFilters(AppState.currentPublications);
+                        renderSearchSuggestions(AppState.currentPublications);
+                    } catch (e) { /* noop */ }
+                })();
+            }
+        );
+        AppState.homeSubscription = homeUnsubscribe;
+    }
+
+    function stopHomeSubscription() {
+        if (homeUnsubscribe) {
+            try { homeUnsubscribe(); } catch (e) {}
+            homeUnsubscribe = null;
+        }
+        AppState.homeSubscription = null;
+        homeFirstSnapshotHandled = false;
+        hideHomeNewBanner();
+    }
+
+    function handleHomeSnapshot(changes, snapshot) {
+        if (!homeFirstSnapshotHandled) {
+            homeFirstSnapshotHandled = true;
+            const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            AppState.currentPublications = all;
+            rerenderHome();
+            renderHomeFilters(AppState.currentPublications);
+            renderSearchSuggestions(AppState.currentPublications);
+            if (AppState.currentView === 'search') renderSearchResults(getFilteredList());
+            return;
+        }
+
+        if (changes.removed.length) {
+            const removedIds = new Set(changes.removed.map(p => p.id));
+            AppState.currentPublications = AppState.currentPublications.filter(p => !removedIds.has(p.id));
+            pendingHomePublications = pendingHomePublications.filter(p => !removedIds.has(p.id));
+            if (!pendingHomePublications.length) hideHomeNewBanner();
+        }
+
+        if (changes.modified.length) {
+            const modMap = new Map(changes.modified.map(p => [p.id, p]));
+            AppState.currentPublications = AppState.currentPublications.map(p =>
+                modMap.has(p.id) ? modMap.get(p.id) : p
+            );
+            pendingHomePublications = pendingHomePublications.map(p =>
+                modMap.has(p.id) ? modMap.get(p.id) : p
+            );
+        }
+
+        if (changes.added.length) {
+            const main = document.getElementById('main-content');
+            const scrollTop = main ? main.scrollTop : 0;
+            const atTop = scrollTop < 100;
+            const isOnHome = AppState.currentView === 'home';
+
+            const existingIds = new Set([
+                ...AppState.currentPublications.map(p => p.id),
+                ...pendingHomePublications.map(p => p.id)
+            ]);
+            const newItems = changes.added.filter(p => !existingIds.has(p.id));
+
+            if (newItems.length) {
+                if (isOnHome && !atTop) {
+                    pendingHomePublications.push(...newItems);
+                    AppState.hasPendingHomeUpdates = true;
+                    AppState.pendingHomePublications = pendingHomePublications.slice();
+                    showHomeNewBanner();
+                } else {
+                    AppState.currentPublications = [...newItems, ...AppState.currentPublications];
+                    AppState.currentPublications.sort(sortByCreatedAtDesc);
+                }
+            }
+        }
+
+        rerenderHome();
+        renderHomeFilters(AppState.currentPublications);
+        renderSearchSuggestions(AppState.currentPublications);
+        if (AppState.currentView === 'search') renderSearchResults(getFilteredList());
+    }
+
+    function rerenderHome() {
+        if (!productsGrid) return;
+        const homeList = AppState.activeCategoryFilter
+            ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
+            : AppState.currentPublications;
+        renderProducts(productsGrid, homeList);
+    }
+
+    function showHomeNewBanner() {
+        if (!homeNewBanner || !homeNewBannerText) return;
+        const count = pendingHomePublications.length;
+        if (!count) { hideHomeNewBanner(); return; }
+        homeNewBannerText.textContent = count === 1
+            ? '1 nueva publicación'
+            : `${count} nuevas publicaciones`;
+        homeNewBanner.classList.remove('hidden');
+    }
+
+    function hideHomeNewBanner() {
+        if (homeNewBanner) homeNewBanner.classList.add('hidden');
+        pendingHomePublications = [];
+        AppState.hasPendingHomeUpdates = false;
+        AppState.pendingHomePublications = [];
+    }
+
+    function applyPendingHomeUpdates() {
+        if (!pendingHomePublications.length) { hideHomeNewBanner(); return; }
+
+        const existingIds = new Set(AppState.currentPublications.map(p => p.id));
+        const newItems = pendingHomePublications.filter(p => !existingIds.has(p.id));
+
+        AppState.currentPublications = [...newItems, ...AppState.currentPublications];
+        AppState.currentPublications.sort(sortByCreatedAtDesc);
+
+        hideHomeNewBanner();
+        rerenderHome();
+
+        if (window.HapticsService) HapticsService.light();
+
+        const main = document.getElementById('main-content');
+        if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     /* =====================================================
@@ -218,9 +442,21 @@
             if (txt) distanceHtml = `<i class="fa-solid fa-location-dot"></i><span>${txt}</span>`;
         }
 
+        const presentationLabel = (function () {
+            if (!pub.presentation || !pub.presentation.quantity) return '';
+            const short = window.UnitCatalog ? UnitCatalog.short(pub.presentation.unitCode) : '';
+            if (!short) return '';
+            return `${pub.presentation.quantity} ${short}`;
+        })();
+
         const timeText = Formatters.formatRelativeTime(pub.createdAt);
-        const metaSeparator = (distanceHtml && timeText) ? '<span class="dot">·</span>' : '';
-        const timeHtml = timeText ? `<span>${timeText}</span>` : '';
+        const metaParts = [];
+        if (distanceHtml) metaParts.push(distanceHtml);
+        if (presentationLabel) metaParts.push(`<i class="fa-solid fa-box-open"></i><span>${Formatters.escapeHtml(presentationLabel)}</span>`);
+        if (timeText) metaParts.push(`<span>${timeText}</span>`);
+        const metaHtml = metaParts.map((p, i) => i === 0 ? p : `<span class="dot">·</span>${p}`).join('');
+
+        const priceHtml = Formatters.formatPriceWithUnit(pub.price, pub.unitCode);
 
         card.innerHTML = `
             <div class="product-img">
@@ -232,12 +468,10 @@
                 ${storeLine}
                 <h4>${Formatters.escapeHtml(pub.name || '')}</h4>
                 <div class="product-price-row">
-                    <span class="product-price">${Formatters.formatPrice(pub.price)}</span>
+                    <span class="product-price">${priceHtml}</span>
                     ${scheduleChip}
                 </div>
-                <div class="product-meta">
-                    ${distanceHtml}${metaSeparator}${timeHtml}
-                </div>
+                <div class="product-meta">${metaHtml}</div>
             </div>`;
 
         card.addEventListener('click', (e) => {
@@ -248,17 +482,116 @@
         return card;
     }
 
-    function renderProducts(container, list) {
+    /* =====================================================
+       EMPTY STATES INTELIGENTES
+       ===================================================== */
+    function renderEmptyState(container, { type, query, category }) {
         if (!container) return;
         container.innerHTML = '';
+
+        let icon = 'fa-box-open';
+        let title = 'Sin publicaciones';
+        let text = 'Cuando haya publicaciones cerca de ti, las verás aquí.';
+        let actionLabel = '';
+        let actionId = '';
+
+        if (type === 'search-no-results') {
+            icon = 'fa-magnifying-glass';
+            title = 'Sin resultados';
+            text = query
+                ? `No encontramos nada para "${query}". Prueba con otra palabra.`
+                : 'No hay publicaciones que coincidan con los filtros.';
+            actionLabel = 'Limpiar búsqueda';
+            actionId = 'empty-clear-search';
+        } else if (type === 'filter-no-results') {
+            icon = 'fa-filter-circle-xmark';
+            title = 'Sin coincidencias';
+            text = 'Prueba quitando algún filtro para ampliar los resultados.';
+            actionLabel = 'Limpiar filtros';
+            actionId = 'empty-clear-filters';
+        } else if (type === 'category-empty') {
+            icon = 'fa-tag';
+            title = `Sin publicaciones en ${category || 'esta categoría'}`;
+            text = 'Explora otras categorías o mira todo lo que hay cerca de ti.';
+            actionLabel = 'Ver todas';
+            actionId = 'empty-show-all';
+        } else if (type === 'no-data') {
+            icon = 'fa-store-slash';
+            title = 'Aún no hay publicaciones';
+            text = 'Sé de los primeros en publicar algo en PipGo.';
+            actionLabel = 'Anunciarme';
+            actionId = 'empty-go-publish';
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'empty-state-intelligent';
+        wrap.innerHTML = `
+            <div class="empty-state-icon"><i class="fa-solid ${icon}"></i></div>
+            <h4>${Formatters.escapeHtml(title)}</h4>
+            <p>${Formatters.escapeHtml(text)}</p>
+            ${actionLabel ? `<button class="empty-action" id="${actionId}">
+                <i class="fa-solid fa-arrow-right"></i> ${Formatters.escapeHtml(actionLabel)}
+            </button>` : ''}`;
+        container.appendChild(wrap);
+
+        if (actionId === 'empty-clear-search') {
+            const b = document.getElementById(actionId);
+            if (b) b.addEventListener('click', () => {
+                searchInput.value = '';
+                clearSearch.classList.remove('visible');
+                searchSuggestions.style.display = 'block';
+                handleSearchInput();
+            });
+        } else if (actionId === 'empty-clear-filters') {
+            const b = document.getElementById(actionId);
+            if (b) b.addEventListener('click', () => {
+                activeFilterCategory = '';
+                AppState.activeCategoryFilter = '';
+                activeFilterSeller = '';
+                if (searchInput) searchInput.value = '';
+                if (clearSearch) clearSearch.classList.remove('visible');
+                renderCategoriesScroll();
+                renderFilterChips();
+                renderHomeFilters(AppState.currentPublications);
+                renderSearchResults(AppState.currentPublications);
+            });
+        } else if (actionId === 'empty-show-all') {
+            const b = document.getElementById(actionId);
+            if (b) b.addEventListener('click', () => {
+                AppState.activeCategoryFilter = '';
+                activeFilterCategory = '';
+                renderHomeFilters(AppState.currentPublications);
+                renderCategoriesScroll();
+                rerenderHome();
+            });
+        } else if (actionId === 'empty-go-publish') {
+            const b = document.getElementById(actionId);
+            if (b) b.addEventListener('click', () => NavigationUI.switchView('anunciarme'));
+        }
+    }
+
+    function renderProducts(container, list) {
+        if (!container) return;
+
+        const isHome = container === productsGrid;
+        const query = searchInput ? searchInput.value.trim() : '';
+
         if (!list.length) {
-            container.innerHTML = `
-                <div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-tertiary);">
-                    <i class="fa-solid fa-magnifying-glass" style="font-size:32px;display:block;margin-bottom:12px;"></i>
-                    <p style="font-size:14px;">No se encontraron publicaciones</p>
-                </div>`;
+            if (AppState.currentPublications.length === 0) {
+                renderEmptyState(container, { type: 'no-data' });
+            } else if (isHome && AppState.activeCategoryFilter) {
+                renderEmptyState(container, { type: 'category-empty', category: AppState.activeCategoryFilter });
+            } else if (!isHome && query) {
+                renderEmptyState(container, { type: 'search-no-results', query });
+            } else if (!isHome && (activeFilterCategory || activeFilterSeller)) {
+                renderEmptyState(container, { type: 'filter-no-results' });
+            } else {
+                renderEmptyState(container, { type: 'no-data' });
+            }
             return;
         }
+
+        container.innerHTML = '';
         list.forEach(pub => container.appendChild(createProductCard(pub)));
         FavoriteUI.updateAllButtons();
     }
@@ -283,11 +616,19 @@
     }
 
     function onEnterHome() {
-        renderHomeFilters(AppState.currentPublications);
         const list = AppState.activeCategoryFilter
             ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
             : AppState.currentPublications;
-        renderProducts(productsGrid, list);
+        renderHomeFilters(AppState.currentPublications);
+        if (AppState.currentPublications.length) {
+            renderProducts(productsGrid, list);
+        }
+        startHomeSubscription();
+        if (pendingHomePublications.length) showHomeNewBanner();
+    }
+
+    function onLeaveHome() {
+        stopHomeSubscription();
     }
 
     /* =====================================================
@@ -306,10 +647,7 @@
         const cats = getActiveCategories(publications || []);
         strip.innerHTML = '';
 
-        if (!cats.length) {
-            strip.style.display = 'none';
-            return;
-        }
+        if (!cats.length) { strip.style.display = 'none'; return; }
         strip.style.display = 'flex';
 
         const current = AppState.activeCategoryFilter || '';
@@ -404,7 +742,7 @@
     }
 
     /* =====================================================
-       SUGERENCIAS DINÁMICAS
+       SUGERENCIAS
        ===================================================== */
     function renderSearchSuggestions(publications) {
         const suggestions = PublicationService.buildSuggestions(publications);
@@ -464,6 +802,7 @@
         });
     }
 
+    /* --- Con debounce: el feedback visual es inmediato, el filtrado no. --- */
     function handleSearchInput() {
         const query = searchInput.value.trim();
         if (query) {
@@ -473,7 +812,12 @@
             clearSearch.classList.remove('visible');
             searchSuggestions.style.display = 'block';
         }
-        renderSearchResults(getFilteredList());
+
+        if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => {
+            searchDebounceTimer = null;
+            renderSearchResults(getFilteredList());
+        }, SEARCH_DEBOUNCE_MS);
     }
 
     /* =====================================================
@@ -488,6 +832,8 @@
         publicationForm.dataset.editId = '';
         setSubmitButton('Publicar anuncio', 'fa-paper-plane');
         publicationForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        setTimeout(() => maybeOfferDraftRestore(), 280);
     }
 
     function resetFormMode() {
@@ -495,6 +841,7 @@
         publicationForm.reset();
         photoSlots.forEach(resetSlot);
         resetSchedule();
+        if (productHasWhatsappInput) productHasWhatsappInput.checked = false;
         stepType.classList.remove('hidden');
         publicationForm.classList.add('hidden');
         typeCalle.classList.remove('selected');
@@ -502,6 +849,11 @@
         setSubmitButton('Publicar anuncio', 'fa-paper-plane');
         hideFormError();
         AppState.currentLocation = null;
+        AppState.formDirtyState = false;
+
+        onCategoryChange();
+        updateDescriptionCounter();
+        updatePriceHint();
     }
 
     function resetSlot(slot) {
@@ -544,7 +896,135 @@
     }
 
     /* =====================================================
-       HORARIO (form)
+       CATEGORÍA → UNIDAD / CONDICIÓN / PRESENTACIÓN
+       ===================================================== */
+    function onCategoryChange() {
+        const category = productCategorySelect ? productCategorySelect.value : '';
+
+        if (!category) {
+            unitGroup.classList.add('hidden');
+            conditionGroup.classList.add('hidden');
+            presentationGroup.classList.add('hidden');
+            updatePriceHint();
+            return;
+        }
+
+        const cfg = window.CategoryConfig ? CategoryConfig.get(category) : { units: ['pza'] };
+        const units = window.CategoryConfig
+            ? CategoryConfig.unitsFor(category)
+            : (window.UnitCatalog ? UnitCatalog.list(cfg.units) : []);
+
+        if (units.length) {
+            const prev = productUnitSelect.value;
+            fillSelectWithUnits(productUnitSelect, units, { emptyOption: false });
+            const codes = units.map(u => u.code);
+            if (prev && codes.includes(prev)) productUnitSelect.value = prev;
+            else productUnitSelect.value = units[0].code;
+            unitGroup.classList.remove('hidden');
+        } else {
+            unitGroup.classList.add('hidden');
+            productUnitSelect.innerHTML = '';
+        }
+
+        if (cfg.showPresentation && units.length) {
+            fillSelectWithUnits(productPresentationUnit, units, { emptyOption: false });
+            presentationGroup.classList.remove('hidden');
+        } else {
+            presentationGroup.classList.add('hidden');
+            productPresentationQty.value = '';
+            productPresentationUnit.innerHTML = '';
+        }
+
+        if (cfg.showCondition && cfg.conditions && cfg.conditions.length) {
+            buildConditionChips(cfg.conditions);
+            conditionGroup.classList.remove('hidden');
+        } else {
+            conditionGroup.classList.add('hidden');
+            conditionChips.innerHTML = '';
+        }
+
+        updatePriceHint();
+    }
+
+    function buildConditionChips(conditions) {
+        conditionChips.innerHTML = '';
+        const icons = {
+            new: 'fa-box-open',
+            used: 'fa-recycle',
+            refurbished: 'fa-screwdriver-wrench'
+        };
+
+        conditions.forEach((code, index) => {
+            const label = window.CategoryConfig ? CategoryConfig.conditionLabel(code) : code;
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'condition-chip' + (index === 0 ? ' active' : '');
+            chip.dataset.condition = code;
+            chip.setAttribute('role', 'radio');
+            chip.setAttribute('aria-checked', index === 0 ? 'true' : 'false');
+            chip.innerHTML = `<i class="fa-solid ${icons[code] || 'fa-circle-dot'}"></i> ${Formatters.escapeHtml(label)}`;
+            chip.addEventListener('click', () => {
+                conditionChips.querySelectorAll('.condition-chip').forEach(c => {
+                    c.classList.remove('active');
+                    c.setAttribute('aria-checked', 'false');
+                });
+                chip.classList.add('active');
+                chip.setAttribute('aria-checked', 'true');
+                if (window.HapticsService) HapticsService.light();
+                markFormDirty();
+            });
+            conditionChips.appendChild(chip);
+        });
+    }
+
+    function readCondition() {
+        if (!conditionGroup || conditionGroup.classList.contains('hidden')) return '';
+        const active = conditionChips.querySelector('.condition-chip.active');
+        return active ? active.dataset.condition : '';
+    }
+
+    function readUnitCode() {
+        if (!unitGroup || unitGroup.classList.contains('hidden')) return '';
+        return productUnitSelect.value || '';
+    }
+
+    function readPresentation() {
+        if (!presentationGroup || presentationGroup.classList.contains('hidden')) return null;
+        const raw = String(productPresentationQty.value || '').trim();
+        if (!raw) return null;
+        const qty = parseFloat(raw.replace(',', '.'));
+        if (!isFinite(qty) || qty <= 0) return null;
+        const unitCode = productPresentationUnit.value || '';
+        if (!unitCode) return null;
+        return { quantity: qty, unitCode };
+    }
+
+    function updatePriceHint() {
+        if (!unitHint) return;
+        const rawPrice = document.getElementById('product-price').value;
+        const price = Formatters.sanitizePriceInput(rawPrice);
+        const unit = readUnitCode();
+        if (!price) {
+            unitHint.textContent = 'Se mostrará como "$0 / unidad".';
+            return;
+        }
+        const formatted = Formatters.formatPriceWithUnit(price, unit);
+        unitHint.textContent = `Se mostrará como ${formatted}.`;
+    }
+
+    function updateDescriptionCounter() {
+        if (!descriptionCounter || !descriptionInput) return;
+        const max = (window.Validators && Validators.LIMITS)
+            ? Validators.LIMITS.PUBLICATION_DESCRIPTION_MAX
+            : 400;
+        const current = String(descriptionInput.value || '').length;
+        descriptionCounter.textContent = `${current} / ${max}`;
+        descriptionCounter.classList.toggle('is-near-limit', current >= max * 0.9);
+        descriptionCounter.classList.toggle('is-at-limit', current >= max);
+    }
+
+    /* =====================================================
+       HORARIO
        ===================================================== */
     function setSchedulePanelOpen(open) {
         schedulePanel.classList.toggle('hidden', !open);
@@ -619,6 +1099,7 @@
             AppState.currentLocation = location;
             applyLocationToInput(location);
             Toast.success('Ubicación detectada. Puedes editarla si es necesario.');
+            markFormDirty();
         } catch (error) {
             Toast.error(error.message || 'No pudimos obtener la ubicación.');
         } finally {
@@ -628,7 +1109,340 @@
     }
 
     /* =====================================================
-       SUBMIT — flujo robusto con permisos
+       FORM STATE — DIRTY / DRAFT
+       ===================================================== */
+    function markFormDirty() {
+        if (publicationForm.classList.contains('hidden')) return;
+        AppState.formDirtyState = true;
+        if (!publicationForm.dataset.editId) {
+            saveDraftDebounced();
+        }
+    }
+
+    function readDraftPayload() {
+        if (!productCategorySelect) return null;
+        const sellerType = typeCalle && typeCalle.classList.contains('selected') ? 'calle'
+                         : typeEstablecimiento && typeEstablecimiento.classList.contains('selected') ? 'establecimiento'
+                         : '';
+        if (!sellerType) return null;
+
+        return {
+            savedAt: Date.now(),
+            sellerType,
+            storeName: (document.getElementById('store-name').value || '').trim(),
+            category: productCategorySelect.value || '',
+            name: (document.getElementById('product-name').value || '').trim(),
+            price: Formatters.sanitizePriceInput(document.getElementById('product-price').value),
+            unitCode: readUnitCode(),
+            condition: readCondition(),
+            presentation: readPresentation(),
+            phone: (document.getElementById('product-phone').value || '').trim(),
+            hasWhatsapp: !!(productHasWhatsappInput && productHasWhatsappInput.checked),
+            description: descriptionInput ? descriptionInput.value.trim() : '',
+            extraRefs: (document.getElementById('product-extra-refs').value || '').trim(),
+            reference: (productRefInput.value || '').trim(),
+            schedule: readSchedule()
+        };
+    }
+
+    function hasMeaningfulDraftContent(d) {
+        if (!d) return false;
+        return !!(d.name || d.price || d.description || d.storeName ||
+                  d.reference || d.extraRefs || d.phone ||
+                  (d.category && d.category !== '') ||
+                  (d.schedule && d.schedule.days && d.schedule.days.length));
+    }
+
+    function saveDraftDebounced() {
+        if (draftSaveTimeout) clearTimeout(draftSaveTimeout);
+        draftSaveTimeout = setTimeout(() => {
+            draftSaveTimeout = null;
+            saveDraft();
+        }, DRAFT_SAVE_DELAY);
+    }
+
+    function saveDraft() {
+        if (publicationForm.dataset.editId) return;
+        if (!formWrapper || formWrapper.classList.contains('hidden')) return;
+
+        const payload = readDraftPayload();
+        if (!payload || !hasMeaningfulDraftContent(payload)) return;
+
+        Storage.set(DRAFT_KEY, payload);
+    }
+
+    function clearDraft() {
+        if (draftSaveTimeout) { clearTimeout(draftSaveTimeout); draftSaveTimeout = null; }
+        Storage.remove(DRAFT_KEY);
+    }
+
+    function hasDraft() {
+        const d = Storage.get(DRAFT_KEY, null);
+        return !!(d && typeof d === 'object' && d.savedAt);
+    }
+
+    function applyDraftToForm(draft) {
+        if (!draft) return;
+
+        if (draft.sellerType === 'calle') {
+            typeCalle.classList.add('selected');
+            typeEstablecimiento.classList.remove('selected');
+        } else if (draft.sellerType === 'establecimiento') {
+            typeEstablecimiento.classList.add('selected');
+            typeCalle.classList.remove('selected');
+        } else return;
+
+        stepType.classList.add('hidden');
+        publicationForm.classList.remove('hidden');
+        publicationForm.dataset.editId = '';
+
+        if (draft.storeName) document.getElementById('store-name').value = draft.storeName;
+        if (draft.category) productCategorySelect.value = draft.category;
+        onCategoryChange();
+
+        if (draft.name) document.getElementById('product-name').value = draft.name;
+        if (draft.price) document.getElementById('product-price').value = draft.price;
+
+        if (draft.unitCode) {
+            const exists = [...productUnitSelect.options].some(o => o.value === draft.unitCode);
+            if (exists) productUnitSelect.value = draft.unitCode;
+        }
+
+        if (draft.condition && conditionChips) {
+            conditionChips.querySelectorAll('.condition-chip').forEach(c => {
+                const match = c.dataset.condition === draft.condition;
+                c.classList.toggle('active', match);
+                c.setAttribute('aria-checked', match ? 'true' : 'false');
+            });
+        }
+
+        if (draft.presentation && draft.presentation.quantity) {
+            productPresentationQty.value = draft.presentation.quantity;
+            if (draft.presentation.unitCode) {
+                const existsP = [...productPresentationUnit.options].some(o => o.value === draft.presentation.unitCode);
+                if (existsP) productPresentationUnit.value = draft.presentation.unitCode;
+            }
+        }
+
+        if (draft.phone) document.getElementById('product-phone').value = draft.phone;
+        if (productHasWhatsappInput) productHasWhatsappInput.checked = !!draft.hasWhatsapp;
+        if (draft.description) descriptionInput.value = draft.description;
+        if (draft.extraRefs) document.getElementById('product-extra-refs').value = draft.extraRefs;
+        if (draft.reference) productRefInput.value = draft.reference;
+
+        if (draft.schedule) applyScheduleToForm(draft.schedule);
+
+        updateDescriptionCounter();
+        updatePriceHint();
+
+        AppState.formDirtyState = true;
+        publicationForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function maybeOfferDraftRestore() {
+        if (publicationForm.dataset.editId) return;
+        if (!hasDraft()) return;
+        if (!draftModal) return;
+        draftModal.classList.remove('hidden');
+    }
+
+    /* =====================================================
+       PROTECCIÓN DE SALIDA
+       ===================================================== */
+    function hasUnsavedChanges() {
+        if (!AppState.formDirtyState) return false;
+        if (!publicationForm || publicationForm.classList.contains('hidden')) return false;
+        return true;
+    }
+
+    function confirmLeave(onConfirm) {
+        if (!unsavedModal) { onConfirm(); return; }
+
+        const confirmBtn = document.getElementById('unsaved-confirm');
+        const cancelBtn = document.getElementById('unsaved-cancel');
+        const closeBtn = document.getElementById('unsaved-close');
+
+        const cleanup = () => {
+            confirmBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            closeBtn.removeEventListener('click', onCancel);
+            unsavedModal.classList.add('hidden');
+        };
+        const onOk = () => { cleanup(); onConfirm(); };
+        const onCancel = () => { cleanup(); };
+
+        confirmBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        closeBtn.addEventListener('click', onCancel);
+
+        unsavedModal.classList.remove('hidden');
+    }
+
+    /* =====================================================
+       VISTA PREVIA
+       ===================================================== */
+    function openPreview() {
+        hideFormError();
+        const data = readFormData();
+
+        const v = Validators.validatePublication(data);
+        if (!v.valid) { showFormError(v.error); return; }
+        const schedV = Validators.validateSchedule(data.schedule);
+        if (!schedV.valid) { showFormError(schedV.error); return; }
+
+        previewBody.innerHTML = buildPreviewHtml(data);
+        previewModal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+
+        if (!previewHistoryPushed) {
+            history.pushState({ view: AppState.currentView, overlay: 'preview' }, '', '');
+            previewHistoryPushed = true;
+        }
+    }
+
+    function closePreview(syncHistory = true) {
+        previewModal.classList.add('hidden');
+        document.body.style.overflow = '';
+        previewBody.innerHTML = '';
+
+        if (previewHistoryPushed) {
+            previewHistoryPushed = false;
+            if (syncHistory) {
+                suppressPopstate = true;
+                try { history.back(); } catch (e) {}
+            }
+        }
+    }
+
+    function buildPreviewHtml(data) {
+        const safeImg = Formatters.safeUrl(data.mainImagePreviewUrl) || 'https://via.placeholder.com/300';
+        const categoryChip = data.category
+            ? `<span class="sheet-category-badge">${Formatters.escapeHtml(data.category)}</span>`
+            : '';
+
+        const badges = [];
+        if (data.condition) {
+            const label = window.CategoryConfig ? CategoryConfig.conditionLabel(data.condition) : '';
+            if (label) badges.push(`<span class="sheet-badge sheet-badge-condition">
+                <i class="fa-solid fa-circle-check"></i> ${Formatters.escapeHtml(label)}
+            </span>`);
+        }
+        if (data.presentation && data.presentation.quantity) {
+            const short = window.UnitCatalog ? UnitCatalog.short(data.presentation.unitCode) : '';
+            if (short) badges.push(`<span class="sheet-badge sheet-badge-presentation">
+                <i class="fa-solid fa-box-open"></i> ${data.presentation.quantity} ${Formatters.escapeHtml(short)}
+            </span>`);
+        }
+        const badgesHtml = badges.length
+            ? `<div class="sheet-badges-row">${badges.join('')}</div>`
+            : '';
+
+        const storeHtml = data.storeName
+            ? `<p class="sheet-store-name"><i class="fa-solid fa-store"></i> ${Formatters.escapeHtml(data.storeName)}</p>`
+            : '';
+
+        const priceHtml = Formatters.formatPriceWithUnit(data.price, data.unitCode);
+
+        const scheduleFull = Formatters.formatScheduleFull(data.schedule);
+        const scheduleHtml = scheduleFull
+            ? `<div class="sheet-schedule-block">
+                   <div class="sheet-schedule-icon"><i class="fa-regular fa-clock"></i></div>
+                   <div class="sheet-schedule-info">
+                       <span>Horario</span>
+                       <strong>${Formatters.escapeHtml(scheduleFull)}</strong>
+                   </div>
+               </div>`
+            : '';
+
+        const contactHtml = (data.phone || data.hasWhatsapp)
+            ? `<div class="sheet-contact-row">
+                   <div class="contact-info">
+                       <i class="fa-solid fa-phone"></i>
+                       <span>${Formatters.escapeHtml(data.phone || '—')}</span>
+                   </div>
+                   <div class="sheet-contact-actions">
+                       ${data.phone ? `<span class="btn-outline btn-call"><i class="fa-solid fa-phone"></i> Llamar</span>` : ''}
+                       ${(data.phone && data.hasWhatsapp) ? `<span class="btn-outline btn-whatsapp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</span>` : ''}
+                   </div>
+               </div>`
+            : '';
+
+        const refsHtml = data.extraRefs
+            ? `<div class="sheet-refs-block">
+                   <div class="refs-header"><i class="fa-solid fa-circle-info"></i> Referencias</div>
+                   <p>${Formatters.escapeHtml(data.extraRefs)}</p>
+               </div>`
+            : '';
+
+        const locHtml = data.reference
+            ? `<div class="sheet-location-card">
+                   <div class="location-icon"><i class="fa-solid fa-location-dot"></i></div>
+                   <div class="location-info">
+                       <span>Ubicación de referencia</span>
+                       <strong>${Formatters.escapeHtml(data.reference)}</strong>
+                   </div>
+               </div>`
+            : '';
+
+        const sellerChip = `<span class="preview-seller-chip">
+            <i class="fa-solid fa-user"></i> ${Formatters.escapeHtml(
+                (AppState.currentProfile && AppState.currentProfile.username)
+                    ? '@' + AppState.currentProfile.username
+                    : 'Tú'
+            )}
+        </span>`;
+
+        return `
+            <div class="preview-card">
+                <div class="preview-gallery"><img src="${safeImg}" alt=""></div>
+                <div class="preview-body-inner">
+                    ${categoryChip}
+                    <h3 class="sheet-title">${Formatters.escapeHtml(data.name)}</h3>
+                    ${badgesHtml}
+                    ${storeHtml}
+                    <div class="sheet-price-row">
+                        <span class="sheet-price">${priceHtml}</span>
+                    </div>
+                    ${data.description ? `<p class="sheet-description">${Formatters.escapeHtml(data.description)}</p>` : ''}
+                    ${refsHtml}
+                    ${scheduleHtml}
+                    ${locHtml}
+                    ${contactHtml}
+                    <div class="preview-seller-row">${sellerChip}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    /* =====================================================
+       RECOLECCIÓN DE DATOS
+       ===================================================== */
+    function readFormData() {
+        const sellerType = typeCalle.classList.contains('selected') ? 'calle' : 'establecimiento';
+        return {
+            storeName: document.getElementById('store-name').value.trim(),
+            category: productCategorySelect.value || '',
+            name: document.getElementById('product-name').value.trim(),
+            price: Formatters.sanitizePriceInput(document.getElementById('product-price').value),
+            unitCode: readUnitCode(),
+            condition: readCondition(),
+            presentation: readPresentation(),
+            phone: document.getElementById('product-phone').value.trim(),
+            hasWhatsapp: !!(productHasWhatsappInput && productHasWhatsappInput.checked),
+            description: descriptionInput.value.trim(),
+            extraRefs: document.getElementById('product-extra-refs').value.trim(),
+            reference: productRefInput.value.trim(),
+            sellerType,
+            schedule: readSchedule(),
+            mainImage: photoSlots[0].blob || photoSlots[0].uploadedUrl,
+            mainImageIsBlob: !!photoSlots[0].blob,
+            mainImagePreviewUrl: photoSlots[0].previewUrl || photoSlots[0].uploadedUrl,
+            images: photoSlots.slice(1).map(s => s.previewUrl || s.uploadedUrl).filter(Boolean)
+        };
+    }
+
+    /* =====================================================
+       SUBMIT
        ===================================================== */
     async function handleSubmit(e) {
         e.preventDefault();
@@ -636,7 +1450,6 @@
 
         if (AppState.isSubmitting) return;
 
-        /* Doble validación de permisos (UI + reglas Firestore) */
         if (window.PermissionService && !PermissionService.canPublish()) {
             showFormError(PermissionService.reasonCannotPublish());
             return;
@@ -648,24 +1461,21 @@
         }
 
         const editId = publicationForm.dataset.editId || '';
-        const storeName = document.getElementById('store-name').value.trim();
-        const name = document.getElementById('product-name').value.trim();
-        const price = Formatters.sanitizePriceInput(document.getElementById('product-price').value);
-        const category = document.getElementById('product-category').value;
-        const phone = document.getElementById('product-phone').value.trim();
-        const description = document.getElementById('product-desc').value.trim();
-        const extraRefs = document.getElementById('product-extra-refs').value.trim();
-        const reference = document.getElementById('product-ref').value.trim();
-        const sellerType = typeCalle.classList.contains('selected') ? 'calle' : 'establecimiento';
-        const schedule = readSchedule();
+        const form = readFormData();
 
         const validation = Validators.validatePublication({
-            name, price, category,
-            mainImage: photoSlots[0].blob || photoSlots[0].uploadedUrl
+            name: form.name,
+            price: form.price,
+            category: form.category,
+            unitCode: form.unitCode,
+            condition: form.condition,
+            presentation: form.presentation,
+            description: form.description,
+            mainImage: form.mainImage
         });
         if (!validation.valid) { showFormError(validation.error); return; }
 
-        const scheduleValidation = Validators.validateSchedule(schedule);
+        const scheduleValidation = Validators.validateSchedule(form.schedule);
         if (!scheduleValidation.valid) { showFormError(scheduleValidation.error); return; }
 
         const mainSlot = photoSlots[0];
@@ -713,14 +1523,20 @@
 
             const payload = {
                 userId: AppState.currentUser.uid,
-                sellerType,
-                storeName: storeName || '',
-                name, price, description,
-                extraRefs: extraRefs || '',
-                reference,
-                phone: phone || '',
-                category,
-                schedule: schedule || null,
+                sellerType: form.sellerType,
+                storeName: form.storeName || '',
+                name: form.name,
+                price: form.price,
+                unitCode: form.unitCode || '',
+                condition: form.condition || '',
+                presentation: form.presentation || null,
+                description: form.description,
+                extraRefs: form.extraRefs || '',
+                reference: form.reference,
+                phone: form.phone || '',
+                hasWhatsapp: form.hasWhatsapp,
+                category: form.category,
+                schedule: form.schedule || null,
                 mainImage: mainUrl,
                 images: imageUrls,
                 latitude: location.latitude,
@@ -742,9 +1558,16 @@
                 Toast.success('Publicación creada.');
             }
 
+            if (window.HapticsService) HapticsService.success();
+
             setSubmitButton('Publicado correctamente', 'fa-circle-check');
+
+            if (!editId) clearDraft();
+            AppState.formDirtyState = false;
+
             resetFormMode();
             AppState.currentLocation = null;
+
             await loadPublications();
             NavigationUI.switchView('home');
 
@@ -770,8 +1593,15 @@
             Toast.error('No puedes eliminar esta publicación.');
             return;
         }
-        const confirmed = window.confirm('¿Eliminar esta publicación?\n\nEsta acción no se puede deshacer.');
+        const confirmed = await ConfirmDialog.open({
+            title: 'Eliminar publicación',
+            text: `¿Eliminar "${pub.name}"?\n\nEsta acción no se puede deshacer.`,
+            okText: 'Eliminar',
+            cancelText: 'Cancelar',
+            danger: true
+        });
         if (!confirmed) return;
+
         try {
             await PublicationService.softDelete(pub.id);
             Toast.success('Publicación eliminada.');
@@ -797,13 +1627,17 @@
         publicationForm.classList.remove('hidden');
 
         document.getElementById('store-name').value = pub.storeName || '';
-        document.getElementById('product-category').value = pub.category || '';
+        productCategorySelect.value = pub.category || '';
         document.getElementById('product-name').value = pub.name || '';
         document.getElementById('product-price').value = pub.price || '';
         document.getElementById('product-phone').value = pub.phone || '';
-        document.getElementById('product-desc').value = pub.description || '';
+        descriptionInput.value = pub.description || '';
         document.getElementById('product-extra-refs').value = pub.extraRefs || '';
-        document.getElementById('product-ref').value = pub.reference || '';
+        productRefInput.value = pub.reference || '';
+
+        if (productHasWhatsappInput) {
+            productHasWhatsappInput.checked = pub.hasWhatsapp === true;
+        }
 
         typeCalle.classList.remove('selected');
         typeEstablecimiento.classList.remove('selected');
@@ -816,12 +1650,42 @@
             if (index < photoSlots.length) setSlotImageFromUrl(photoSlots[index], url);
         });
 
+        onCategoryChange();
+
+        if (pub.unitCode && unitGroup && !unitGroup.classList.contains('hidden')) {
+            const exists = [...productUnitSelect.options].some(o => o.value === pub.unitCode);
+            if (exists) productUnitSelect.value = pub.unitCode;
+        }
+
+        if (pub.condition && conditionGroup && !conditionGroup.classList.contains('hidden')) {
+            const chips = conditionChips.querySelectorAll('.condition-chip');
+            chips.forEach(c => {
+                const match = c.dataset.condition === pub.condition;
+                c.classList.toggle('active', match);
+                c.setAttribute('aria-checked', match ? 'true' : 'false');
+            });
+        }
+
+        if (pub.presentation && pub.presentation.quantity &&
+            presentationGroup && !presentationGroup.classList.contains('hidden')) {
+            productPresentationQty.value = pub.presentation.quantity;
+            if (pub.presentation.unitCode) {
+                const existsP = [...productPresentationUnit.options].some(o => o.value === pub.presentation.unitCode);
+                if (existsP) productPresentationUnit.value = pub.presentation.unitCode;
+            }
+        }
+
         applyScheduleToForm(pub.schedule || null);
 
         AppState.currentLocation = {
             latitude: pub.latitude, longitude: pub.longitude, accuracy: pub.accuracy,
             address: pub.address, city: pub.city, state: pub.state, country: pub.country
         };
+
+        updateDescriptionCounter();
+        updatePriceHint();
+
+        AppState.formDirtyState = false;
 
         publicationForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -843,7 +1707,30 @@
             sheetStore.style.display = 'none';
         }
 
-        sheetPrice.textContent = Formatters.formatPrice(product.price);
+        if (sheetBadgesRow) {
+            const badges = [];
+            if (product.condition) {
+                const label = window.CategoryConfig ? CategoryConfig.conditionLabel(product.condition) : '';
+                if (label) badges.push(`<span class="sheet-badge sheet-badge-condition">
+                    <i class="fa-solid fa-circle-check"></i> ${Formatters.escapeHtml(label)}
+                </span>`);
+            }
+            if (product.presentation && product.presentation.quantity) {
+                const short = window.UnitCatalog ? UnitCatalog.short(product.presentation.unitCode) : '';
+                if (short) badges.push(`<span class="sheet-badge sheet-badge-presentation">
+                    <i class="fa-solid fa-box-open"></i> ${product.presentation.quantity} ${Formatters.escapeHtml(short)}
+                </span>`);
+            }
+            if (badges.length) {
+                sheetBadgesRow.innerHTML = badges.join('');
+                sheetBadgesRow.classList.remove('hidden');
+            } else {
+                sheetBadgesRow.innerHTML = '';
+                sheetBadgesRow.classList.add('hidden');
+            }
+        }
+
+        sheetPrice.textContent = Formatters.formatPriceWithUnit(product.price, product.unitCode);
         sheetTime.innerHTML = `<i class="fa-solid fa-clock"></i> ${Formatters.formatRelativeTime(product.createdAt)}`;
         sheetDesc.textContent = product.description || 'Sin descripción.';
 
@@ -866,10 +1753,16 @@
         }
         sheetRef.textContent = refText;
 
-        if (product.phone && product.phone.trim()) {
+        const phoneRaw = product.phone && String(product.phone).trim();
+        if (phoneRaw) {
             sheetContactRow.classList.remove('hidden');
             sheetPhone.textContent = product.phone;
             sheetCall.href = `tel:${product.phone.replace(/\s+/g, '')}`;
+            if (product.hasWhatsapp === true && sheetWhatsapp) {
+                sheetWhatsapp.classList.remove('hidden');
+            } else if (sheetWhatsapp) {
+                sheetWhatsapp.classList.add('hidden');
+            }
         } else {
             sheetContactRow.classList.add('hidden');
         }
@@ -891,19 +1784,11 @@
         FavoriteUI.updateAllButtons();
 
         if (!productSheetHistoryPushed) {
-            history.pushState(
-                { view: AppState.currentView, overlay: 'product', productId: product.id },
-                '', ''
-            );
+            history.pushState({ view: AppState.currentView, overlay: 'product', productId: product.id }, '', '');
             productSheetHistoryPushed = true;
         }
     }
 
-    /**
-     * @param {boolean} syncHistory  true = cerramos manualmente (botón X, backdrop)
-     *                               y hay que quitar el estado del historial.
-     *                               false = lo cierra el popstate (ya estamos en el estado previo).
-     */
     function closeProductSheet(syncHistory = true) {
         sheetBackdrop.classList.remove('open');
         isSheetOpen = false;
@@ -914,9 +1799,54 @@
             productSheetHistoryPushed = false;
             if (syncHistory) {
                 suppressPopstate = true;
-                try { history.back(); } catch (e) { /* noop */ }
+                try { history.back(); } catch (e) {}
             }
         }
+    }
+
+    /* =====================================================
+       WHATSAPP CONTEXTUAL
+       ===================================================== */
+    function buildWhatsappMessage(pub) {
+        const name = pub && pub.name ? `"${pub.name}"` : 'una publicación';
+        return `Hola, vi tu publicación de ${name} en PipGo. ` +
+               `Me interesa y quisiera saber si todavía está disponible.`;
+    }
+
+    function normalizeWhatsappPhone(raw) {
+        const digits = String(raw || '').replace(/\D/g, '');
+        if (!digits) return '';
+        if (digits.length === 10) return '52' + digits;
+        if (digits.length >= 11 && digits.length <= 15) return digits;
+        return digits;
+    }
+
+    function openWhatsappForProduct(pub) {
+        if (!pub || pub.hasWhatsapp !== true) {
+            Toast.warning('Este vendedor no ha habilitado WhatsApp.');
+            return;
+        }
+        if (!pub.phone || !String(pub.phone).trim()) {
+            Toast.warning('Este vendedor no tiene un teléfono de contacto.');
+            return;
+        }
+        const phone = normalizeWhatsappPhone(pub.phone);
+        if (!phone) { Toast.warning('El teléfono del vendedor no es válido.'); return; }
+
+        const message = buildWhatsappMessage(pub);
+        const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
+        try {
+            if (window.cordova && window.cordova.InAppBrowser) {
+                cordova.InAppBrowser.open(url, '_system');
+                return;
+            }
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+                window.Capacitor.Plugins.Browser.open({ url });
+                return;
+            }
+        } catch (e) { Logger.warn('WhatsApp nativo falló, usando window.open', e); }
+        window.open(url, '_blank', 'noopener');
     }
 
     /* ---------- Galería ---------- */
@@ -1033,10 +1963,7 @@
         document.body.style.overflow = 'hidden';
 
         if (!lightboxHistoryPushed) {
-            history.pushState(
-                { view: AppState.currentView, overlay: 'lightbox' },
-                '', ''
-            );
+            history.pushState({ view: AppState.currentView, overlay: 'lightbox' }, '', '');
             lightboxHistoryPushed = true;
         }
     }
@@ -1054,7 +1981,7 @@
             lightboxHistoryPushed = false;
             if (syncHistory) {
                 suppressPopstate = true;
-                try { history.back(); } catch (e) { /* noop */ }
+                try { history.back(); } catch (e) {}
             }
         }
     }
@@ -1227,11 +2154,44 @@
         sheetContactRow = document.getElementById('sheet-contact-row');
         sheetPhone = document.getElementById('sheet-phone');
         sheetCall = document.getElementById('sheet-call');
+        sheetWhatsapp = document.getElementById('sheet-whatsapp');
         sheetScheduleBlock = document.getElementById('sheet-schedule-block');
         sheetScheduleText = document.getElementById('sheet-schedule-text');
+        sheetBadgesRow = document.getElementById('sheet-badges-row');
         btnDirections = document.getElementById('btn-directions');
         sheetMapLink = document.getElementById('sheet-map-link');
         btnChatV2 = document.getElementById('btn-chat-v2');
+
+        productHasWhatsappInput = document.getElementById('product-has-whatsapp');
+
+        productCategorySelect = document.getElementById('product-category');
+        unitGroup = document.getElementById('unit-group');
+        productUnitSelect = document.getElementById('product-unit');
+        unitHint = document.getElementById('unit-hint');
+        conditionGroup = document.getElementById('condition-group');
+        conditionChips = document.getElementById('condition-chips');
+        presentationGroup = document.getElementById('presentation-group');
+        productPresentationQty = document.getElementById('product-presentation-qty');
+        productPresentationUnit = document.getElementById('product-presentation-unit');
+        descriptionInput = document.getElementById('product-desc');
+        descriptionCounter = document.getElementById('desc-counter');
+
+        previewModal = document.getElementById('preview-modal');
+        previewClose = document.getElementById('preview-close');
+        previewBody = document.getElementById('preview-body');
+        previewBack = document.getElementById('preview-back');
+        previewPublish = document.getElementById('preview-publish');
+        btnPreview = document.getElementById('btn-preview');
+
+        homeNewBanner = document.getElementById('home-new-banner');
+        homeNewBannerText = document.getElementById('home-new-banner-text');
+
+        draftModal = document.getElementById('draft-modal');
+        draftContinueBtn = document.getElementById('draft-continue');
+        draftDiscardBtn = document.getElementById('draft-discard');
+        draftCloseBtn = document.getElementById('draft-close');
+
+        unsavedModal = document.getElementById('unsaved-modal');
 
         scheduleToggle = document.getElementById('schedule-toggle');
         schedulePanel = document.getElementById('schedule-panel');
@@ -1264,20 +2224,90 @@
         const priceInput = document.getElementById('product-price');
         priceInput.addEventListener('input', (e) => {
             e.target.value = Formatters.sanitizePriceInput(e.target.value);
+            updatePriceHint();
         });
 
         typeCalle.addEventListener('click', () => selectSellerType(typeCalle));
         typeEstablecimiento.addEventListener('click', () => selectSellerType(typeEstablecimiento));
-        btnBackType.addEventListener('click', resetFormMode);
+        btnBackType.addEventListener('click', () => {
+            if (AppState.formDirtyState) {
+                confirmLeave(() => {
+                    AppState.formDirtyState = false;
+                    resetFormMode();
+                });
+            } else {
+                resetFormMode();
+            }
+        });
 
         photoSlots.forEach(slot => {
             slot.slot.addEventListener('click', () => { if (!slot.uploadedUrl) slot.input.click(); });
             slot.input.addEventListener('change', e => {
                 const file = e.target.files[0];
-                if (file) processAndPreview(slot, file);
+                if (file) { processAndPreview(slot, file); markFormDirty(); }
             });
-            slot.removeBtn.addEventListener('click', e => { e.stopPropagation(); resetSlot(slot); });
+            slot.removeBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                resetSlot(slot);
+                markFormDirty();
+            });
         });
+
+        productCategorySelect.addEventListener('change', () => { onCategoryChange(); markFormDirty(); });
+        productUnitSelect.addEventListener('change', () => { updatePriceHint(); markFormDirty(); });
+
+        descriptionInput.addEventListener('input', () => { updateDescriptionCounter(); markFormDirty(); });
+
+        publicationForm.addEventListener('input', () => {
+            if (publicationForm.classList.contains('hidden')) return;
+            markFormDirty();
+        });
+        publicationForm.addEventListener('change', () => {
+            if (publicationForm.classList.contains('hidden')) return;
+            markFormDirty();
+        });
+
+        if (btnPreview) btnPreview.addEventListener('click', openPreview);
+        if (previewClose) previewClose.addEventListener('click', () => closePreview());
+        if (previewBack) previewBack.addEventListener('click', () => closePreview());
+        if (previewPublish) previewPublish.addEventListener('click', () => {
+            closePreview();
+            if (publicationForm.requestSubmit) {
+                publicationForm.requestSubmit();
+            } else {
+                const evt = new Event('submit', { cancelable: true, bubbles: true });
+                publicationForm.dispatchEvent(evt);
+            }
+        });
+        if (previewModal) {
+            previewModal.addEventListener('click', (e) => {
+                if (e.target === previewModal) closePreview();
+            });
+        }
+
+        if (homeNewBanner) {
+            homeNewBanner.addEventListener('click', () => applyPendingHomeUpdates());
+        }
+
+        if (draftContinueBtn) {
+            draftContinueBtn.addEventListener('click', () => {
+                const d = Storage.get(DRAFT_KEY, null);
+                draftModal.classList.add('hidden');
+                if (d) applyDraftToForm(d);
+            });
+        }
+        if (draftDiscardBtn) {
+            draftDiscardBtn.addEventListener('click', () => {
+                draftModal.classList.add('hidden');
+                clearDraft();
+                AppState.formDirtyState = false;
+            });
+        }
+        if (draftCloseBtn) {
+            draftCloseBtn.addEventListener('click', () => {
+                draftModal.classList.add('hidden');
+            });
+        }
 
         scheduleToggle.addEventListener('click', () => {
             const willOpen = schedulePanel.classList.contains('hidden');
@@ -1329,6 +2359,14 @@
         btnDirections.addEventListener('click', () => openDirections(AppState.currentProduct));
         sheetMapLink.addEventListener('click', () => openDirections(AppState.currentProduct));
 
+        if (sheetWhatsapp) {
+            sheetWhatsapp.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!AppState.currentProduct) return;
+                openWhatsappForProduct(AppState.currentProduct);
+            });
+        }
+
         btnChatV2.addEventListener('click', () => {
             if (window.PermissionService && !PermissionService.canMessage()) {
                 AppState.pendingAction = {
@@ -1350,6 +2388,16 @@
         lightboxTrack.addEventListener('pointermove', handleLightboxMove);
         lightboxTrack.addEventListener('pointerup', handleLightboxUp);
         lightboxTrack.addEventListener('pointercancel', handleLightboxUp);
+
+        updateDescriptionCounter();
+
+        window.addEventListener('beforeunload', (e) => {
+            if (hasUnsavedChanges()) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        });
     }
 
     /* =====================================================
@@ -1365,17 +2413,23 @@
         showAllPublications,
         onEnterSearch,
         onEnterHome,
+        onLeaveHome,
+        stopHomeSubscription,
         openProductSheet,
         closeProductSheet,
         openLightbox,
         closeLightbox,
         openEditForm,
         deletePublication,
+        resetFormMode,
         isProductSheetOpen: () => isSheetOpen,
         isLightboxOpen,
         isFilterModalOpen,
         closeFilterModal,
-        /* Usado por NavigationUI para no reaccionar a popstates propios */
+        isPreviewModalOpen: () => previewModal && !previewModal.classList.contains('hidden'),
+        closePreview,
+        hasUnsavedChanges,
+        confirmLeave,
         consumeSuppressPopstate: () => {
             if (suppressPopstate) {
                 suppressPopstate = false;

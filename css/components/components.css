@@ -986,3 +986,17 @@
 .btn-delete { background: var(--danger-bg); color: var(--danger-fg); flex: 1; justify-content: center; }
 .btn-sold { background: var(--coffee-light); color: var(--coffee-dark); flex: 1; justify-content: center; }
 .btn-edit:active, .btn-delete:active, .btn-sold:active { transform: scale(0.95); opacity: 0.9; }
+
+
+/* Variante danger del botón primary (para ConfirmDialog) */
+.btn-primary.btn-danger {
+    background: var(--danger-fg);
+    box-shadow: 0 10px 25px rgba(185, 28, 28, 0.28);
+}
+.btn-primary.btn-danger:active {
+    background: #991B1B;
+    box-shadow: 0 4px 12px rgba(185, 28, 28, 0.2);
+}
+
+/* Saltos de línea en textos de modales */
+.unsaved-text { white-space: pre-line; }

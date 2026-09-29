@@ -1,6 +1,7 @@
 /* =====================================================
    PIPGO · SELLER SERVICE
    Solicitudes de vendedor (una sola cuenta, distintos permisos).
+   Soporta envío inicial y reenvío tras rechazo / needs_info.
    ===================================================== */
 
 window.SellerService = {
@@ -10,26 +11,28 @@ window.SellerService = {
         const uid = AppState.currentUser.uid;
         const now = firebase.firestore.FieldValue.serverTimestamp();
 
+        // En reenvíos limpiamos los campos de revisión para
+        // volver al estado "pending" (coincide con las rules).
         const payload = {
             uid,
-            sellerType:    data.sellerType,      // "person" | "business"
-            displayName:   data.displayName,
-            businessName:  data.businessName || '',
-            category:      data.category || '',
-            description:   data.description || '',
-            phone:         data.phone || '',
-            city:          data.city || '',
-            state:         data.state || '',
-            socialUrl:     data.socialUrl || '',
-            contactMethod: data.contactMethod || 'phone',
-            termsAccepted: true,
-            status:        'pending',
+            sellerType:      data.sellerType,
+            displayName:     data.displayName,
+            businessName:    data.businessName || '',
+            category:        data.category || '',
+            description:     data.description || '',
+            phone:           data.phone || '',
+            city:            data.city || '',
+            state:           data.state || '',
+            socialUrl:       data.socialUrl || '',
+            contactMethod:   data.contactMethod || 'phone',
+            termsAccepted:   true,
+            status:          'pending',
             rejectionReason: null,
-            adminNote:     null,
-            submittedAt:   now,
-            updatedAt:     now,
-            reviewedAt:    null,
-            reviewedBy:    null
+            adminNote:       null,
+            submittedAt:     now,
+            updatedAt:       now,
+            reviewedAt:      null,
+            reviewedBy:      null
         };
 
         const batch = db.batch();
@@ -44,7 +47,6 @@ window.SellerService = {
         );
         await batch.commit();
 
-        // Refrescar estado local
         if (AppState.currentProfile) {
             AppState.currentProfile.sellerStatus = 'pending';
         }
@@ -57,7 +59,6 @@ window.SellerService = {
         return snap.exists ? snap.data() : null;
     },
 
-    /* Vista previa para admin */
     async listPending() {
         const snap = await db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS)
             .where('status', '==', 'pending')

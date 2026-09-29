@@ -6,14 +6,12 @@
 
 window.Formatters = {
 
-    /* ---------- Escape HTML ---------- */
     escapeHtml(value) {
         const div = document.createElement('div');
         div.textContent = value == null ? '' : String(value);
         return div.innerHTML;
     },
 
-    /* ---------- URLs seguras ---------- */
     safeUrl(url) {
         if (!url) return '';
         try {
@@ -23,7 +21,6 @@ window.Formatters = {
         return '';
     },
 
-    /* ---------- Tiempo relativo ("hace 5 min") ---------- */
     formatRelativeTime(timestamp) {
         if (!timestamp) return '';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -34,7 +31,7 @@ window.Formatters = {
         return `hace ${Math.floor(diff / 86400)} días`;
     },
 
-    /* ---------- Precio ---------- */
+    /* ---------- Precio básico ---------- */
     formatPrice(value) {
         if (value == null || value === '') return '';
         let str = String(value).trim();
@@ -50,18 +47,22 @@ window.Formatters = {
         return '$' + str;
     },
 
-    /* Input de precio: solo dígitos y un punto decimal */
+    /* ---------- Precio + unidad: "$25 / kg" ---------- */
+    formatPriceWithUnit(price, unitCode) {
+        const base = this.formatPrice(price);
+        if (!base) return '';
+        const short = window.UnitCatalog ? UnitCatalog.short(unitCode) : '';
+        if (!short) return base;
+        return `${base} / ${short}`;
+    },
+
     sanitizePriceInput(value) {
         return String(value || '').replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
     },
 
-    /* =================================================
-       DISTANCIA — Haversine (metros)
-       Devuelve null si falta alguna coordenada.
-       ================================================= */
     calculateDistance(lat1, lon1, lat2, lon2) {
         if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
-        const R = 6371000; // radio terrestre en metros
+        const R = 6371000;
         const toRad = (d) => d * Math.PI / 180;
         const dLat = toRad(lat2 - lat1);
         const dLon = toRad(lon2 - lon1);
@@ -71,7 +72,6 @@ window.Formatters = {
         return 2 * R * Math.asin(Math.sqrt(a));
     },
 
-    /* Formatea metros → "850 m" o "2.3 km" */
     formatDistance(meters) {
         if (meters == null || isNaN(meters)) return '';
         if (meters < 1000) return `${Math.round(meters)} m`;
@@ -80,10 +80,7 @@ window.Formatters = {
 
     /* =================================================
        HORARIOS
-       schedule = { days:[1..5], start:"08:00", end:"12:00" }
        ================================================= */
-
-    /* Representación compacta para cards: "Lun–Vie · 08:00–12:00" */
     formatScheduleCompact(schedule) {
         if (!schedule || !schedule.days || !schedule.days.length ||
             !schedule.start || !schedule.end) return '';
@@ -104,7 +101,6 @@ window.Formatters = {
         return `${daysLabel} · ${schedule.start}–${schedule.end}`;
     },
 
-    /* Representación completa para el sheet */
     formatScheduleFull(schedule) {
         if (!schedule || !schedule.days || !schedule.days.length ||
             !schedule.start || !schedule.end) return '';

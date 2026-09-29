@@ -1,7 +1,6 @@
 /* =====================================================
    PIPGO · FAVORITE UI
-   Just-in-time auth: si es visitante, guarda la acción
-   pendiente y la ejecuta tras el login.
+   Just-in-time auth + haptics.
    ===================================================== */
 
 (function () {
@@ -40,7 +39,6 @@
     }
 
     async function toggleFavorite(publicationId) {
-        // Visitante → guardamos la intención y abrimos login
         if (!AppState.currentUser) {
             AppState.pendingAction = { type: 'toggleFavorite', publicationId };
             AuthUI.openAuthModal('login');
@@ -51,6 +49,8 @@
             const isFavorite = await FavoriteService.toggleFavorite(AppState.currentUser.uid, publicationId);
             if (isFavorite) AppState.favoriteIds.add(publicationId);
             else            AppState.favoriteIds.delete(publicationId);
+
+            if (window.HapticsService) HapticsService.light();
 
             updateAllButtons();
             Toast.success(isFavorite ? 'Guardado en favoritos.' : 'Eliminado de favoritos.');

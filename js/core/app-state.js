@@ -27,12 +27,22 @@ window.AppState = {
 
     /* ---------- Form ---------- */
     isSubmitting: false,
+    formDirtyState: false,
 
     /* ---------- Seller ---------- */
     currentSellerApplication: null,
 
     /* ---------- Just-in-time auth ---------- */
     pendingAction: null,
+
+    /* ---------- Realtime Home ---------- */
+    homeSubscription: null,
+    hasPendingHomeUpdates: false,
+    pendingHomePublications: [],
+
+    /* ---------- Preferencias ---------- */
+    prefHapticsEnabled: true,
+    prefSoundsEnabled: false,
 
     resetSession() {
         this.currentProfile = null;
@@ -41,7 +51,10 @@ window.AppState = {
         this.currentLocation = null;
         this.currentProduct = null;
         this.isSubmitting = false;
+        this.formDirtyState = false;
         this.currentSellerApplication = null;
         this.pendingAction = null;
+        this.hasPendingHomeUpdates = false;
+        this.pendingHomePublications = [];
     }
 };

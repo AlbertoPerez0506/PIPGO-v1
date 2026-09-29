@@ -3,8 +3,26 @@
     let navigationStack = ['home'];
     let initialized = false;
 
-    function switchView(viewName, { push = false } = {}) {
+    function switchView(viewName, { push = false, force = false } = {}) {
         if (viewName === AppState.currentView && !push) return;
+
+        // Guard de cambios sin guardar al salir de "anunciarme"
+        if (!force &&
+            AppState.currentView === 'anunciarme' &&
+            viewName !== 'anunciarme' &&
+            window.PublicationUI &&
+            PublicationUI.hasUnsavedChanges &&
+            PublicationUI.hasUnsavedChanges()) {
+            PublicationUI.confirmLeave(() => {
+                if (window.PublicationUI.resetFormMode) PublicationUI.resetFormMode();
+                switchView(viewName, { push, force: true });
+            });
+            return;
+        }
+
+        const previousView = AppState.currentView;
+        const leavingHome  = previousView === 'home' && viewName !== 'home';
+        const enteringHome = viewName === 'home' && previousView !== 'home';
 
         AppState.currentView = viewName;
 
@@ -16,8 +34,11 @@
 
         mainContent.scrollTo({ top: 0, behavior: 'smooth' });
 
-        // Reset del header inteligente + sincronización de chips al entrar a Home
-        if (viewName === 'home') {
+        if (leavingHome && window.PublicationUI && PublicationUI.onLeaveHome) {
+            PublicationUI.onLeaveHome();
+        }
+
+        if (enteringHome) {
             if (window.PipGoHomeHeader) window.PipGoHomeHeader.reset();
             if (window.PublicationUI && PublicationUI.onEnterHome) PublicationUI.onEnterHome();
         }
@@ -45,90 +66,97 @@
 
     function closeAllOverlays() {
         if (PublicationUI.isProductSheetOpen && PublicationUI.isProductSheetOpen()) {
-            PublicationUI.closeProductSheet(true);
-            return true;
+            PublicationUI.closeProductSheet(true); return true;
         }
         if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
-            PublicationUI.closeLightbox(true);
-            return true;
+            PublicationUI.closeLightbox(true); return true;
+        }
+        if (PublicationUI.isPreviewModalOpen && PublicationUI.isPreviewModalOpen()) {
+            PublicationUI.closePreview(true); return true;
         }
         if (AuthUI.isAuthModalOpen && AuthUI.isAuthModalOpen()) {
-            AuthUI.closeAuthModal();
-            return true;
+            AuthUI.closeAuthModal(); return true;
         }
         if (PublicationUI.isFilterModalOpen && PublicationUI.isFilterModalOpen()) {
-            PublicationUI.closeFilterModal();
-            return true;
+            PublicationUI.closeFilterModal(); return true;
         }
         if (ProfileUI.isSettingsModalOpen && ProfileUI.isSettingsModalOpen()) {
-            ProfileUI.closeSettings();
-            return true;
+            ProfileUI.closeSettings(); return true;
         }
         if (window.AdminUI && AdminUI.isConfirmModalOpen && AdminUI.isConfirmModalOpen()) {
-            AdminUI.closeConfirm();
-            return true;
+            AdminUI.closeConfirm(); return true;
         }
         if (window.SellerUI) {
             const sellerModal = document.getElementById('seller-modal');
             if (sellerModal && !sellerModal.classList.contains('hidden')) {
-                SellerUI.close();
-                return true;
+                SellerUI.close(); return true;
             }
         }
         return false;
     }
 
-    /* Botón atrás nativo (Cordova / Android hardware) */
     function onBackButton(e) {
         if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
-            e.preventDefault();
-            PublicationUI.closeLightbox();   // syncHistory=true → hace history.back() con supresión
-            return;
+            e.preventDefault(); PublicationUI.closeLightbox(); return;
         }
         if (PublicationUI.isProductSheetOpen && PublicationUI.isProductSheetOpen()) {
-            e.preventDefault();
-            PublicationUI.closeProductSheet(); // syncHistory=true → idem
-            return;
+            e.preventDefault(); PublicationUI.closeProductSheet(); return;
+        }
+        if (PublicationUI.isPreviewModalOpen && PublicationUI.isPreviewModalOpen()) {
+            e.preventDefault(); PublicationUI.closePreview(); return;
         }
         if (closeAllOverlays()) { e.preventDefault(); return; }
         if (navigationStack.length > 1) { e.preventDefault(); history.back(); return; }
         if (window.cordova && navigator.app) { e.preventDefault(); navigator.app.exitApp(); }
     }
 
-    /* Popstate: gesto back (iOS/Android moderno) y history.back() propio */
-    function handlePopState(event) {
-        // 1) Si el popstate lo disparamos nosotros (cierre manual de overlay),
-        //    lo ignoramos para no cerrar otros overlays por error.
-        if (PublicationUI.consumeSuppressPopstate && PublicationUI.consumeSuppressPopstate()) {
+    function applyPopstateChange(targetView) {
+        if (!targetView || targetView === 'home') {
+            if (AppState.currentView !== 'home') {
+                navigationStack = ['home'];
+                switchView('home', { push: false, force: true });
+            }
             return;
         }
+        const idx = navigationStack.indexOf(targetView);
+        if (idx >= 0) navigationStack = navigationStack.slice(0, idx + 1);
+        else navigationStack = [targetView];
+        switchView(targetView, { push: false, force: true });
+    }
 
-        // 2) Overlays tienen prioridad sobre el cambio de vista.
-        //    Cerramos sin llamar a history.back() (ya estamos en el estado previo).
+    function handlePopState(event) {
+        if (PublicationUI.consumeSuppressPopstate && PublicationUI.consumeSuppressPopstate()) return;
+
         if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
-            PublicationUI.closeLightbox(false);
-            return;
+            PublicationUI.closeLightbox(false); return;
         }
         if (PublicationUI.isProductSheetOpen && PublicationUI.isProductSheetOpen()) {
-            PublicationUI.closeProductSheet(false);
-            return;
+            PublicationUI.closeProductSheet(false); return;
+        }
+        if (PublicationUI.isPreviewModalOpen && PublicationUI.isPreviewModalOpen()) {
+            PublicationUI.closePreview(false); return;
         }
         if (window.AdminUI && AdminUI.isConfirmModalOpen && AdminUI.isConfirmModalOpen()) {
-            AdminUI.closeConfirm();
+            AdminUI.closeConfirm(); return;
+        }
+
+        const targetView = (event.state && event.state.view) || 'home';
+
+        if (AppState.currentView === 'anunciarme' &&
+            targetView !== 'anunciarme' &&
+            window.PublicationUI &&
+            PublicationUI.hasUnsavedChanges &&
+            PublicationUI.hasUnsavedChanges()) {
+
+            history.pushState({ view: 'anunciarme' }, '', '');
+            PublicationUI.confirmLeave(() => {
+                if (window.PublicationUI.resetFormMode) PublicationUI.resetFormMode();
+                applyPopstateChange(targetView);
+            });
             return;
         }
 
-        // 3) Navegación normal entre vistas
-        const view = event.state && event.state.view;
-        if (!view) {
-            navigationStack = ['home'];
-            if (AppState.currentView !== 'home') switchView('home', { push: false });
-            return;
-        }
-        const idx = navigationStack.indexOf(view);
-        if (idx >= 0) navigationStack = navigationStack.slice(0, idx + 1);
-        else navigationStack = [view];
-        switchView(view, { push: false });
+        applyPopstateChange(targetView);
     }
 
     function init() {
@@ -155,14 +183,12 @@
                 focusSearchInput();
             });
         }
-
         if (homeSearchTrigger) {
             homeSearchTrigger.addEventListener('click', () => {
                 switchView('search', { push: true });
                 focusSearchInput();
             });
         }
-
         if (btnVerTodos) {
             btnVerTodos.addEventListener('click', () => {
                 switchView('search', { push: true });

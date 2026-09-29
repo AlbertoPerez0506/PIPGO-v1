@@ -75,6 +75,11 @@
                     </button>
 
                     <div class="home-filter-chips" id="home-filter-chips" role="tablist" aria-label="Filtrar por categoría"></div>
+
+                    <button id="home-new-banner" class="home-new-banner hidden" type="button" aria-live="polite">
+                        <i class="fa-solid fa-arrow-up"></i>
+                        <span id="home-new-banner-text">1 nueva publicación</span>
+                    </button>
                 </header>
 
                 <div class="section-header">
@@ -123,9 +128,7 @@
                     <h2>Mensajes</h2>
                 </header>
                 <div class="coming-soon">
-                    <div class="coming-soon-icon">
-                        <i class="fa-solid fa-comments"></i>
-                    </div>
+                    <div class="coming-soon-icon"><i class="fa-solid fa-comments"></i></div>
                     <h3>Mensajes directos</h3>
                     <p>Chatea directamente con los vendedores desde la app.</p>
                     <span class="badge-dev">En desarrollo · V2</span>
@@ -257,17 +260,49 @@
                             </div>
                         </div>
 
+                        <div class="input-group hidden" id="unit-group">
+                            <label for="product-unit">Unidad de venta</label>
+                            <div class="select-pro-wrap">
+                                <i class="fa-solid fa-scale-balanced select-pro-icon"></i>
+                                <select id="product-unit"></select>
+                                <i class="fa-solid fa-chevron-down select-pro-arrow"></i>
+                            </div>
+                            <p class="form-hint" id="unit-hint">Se mostrará como "$0 / unidad".</p>
+                        </div>
+
+                        <div class="input-group hidden" id="presentation-group">
+                            <label>Presentación <span class="optional-tag">Opcional</span></label>
+                            <div class="presentation-row">
+                                <input type="tel" id="product-presentation-qty" placeholder="Cantidad" inputmode="decimal" maxlength="8">
+                                <select id="product-presentation-unit"></select>
+                            </div>
+                            <p class="form-hint">Cantidad con la que se vende, por ejemplo: 500 g, 1 kg, 12 piezas.</p>
+                        </div>
+
+                        <div class="input-group hidden" id="condition-group">
+                            <label>Condición</label>
+                            <div class="condition-chips" id="condition-chips" role="radiogroup" aria-label="Condición del producto"></div>
+                        </div>
+
                         <div class="input-group">
                             <label for="product-phone">Teléfono de contacto <span class="optional-tag">Opcional</span></label>
                             <div class="input-prefix-wrap">
                                 <span class="input-prefix"><i class="fa-solid fa-phone"></i></span>
                                 <input type="tel" id="product-phone" placeholder="961 123 4567" inputmode="tel" maxlength="20">
                             </div>
+                            <label class="form-checkbox" for="product-has-whatsapp">
+                                <input type="checkbox" id="product-has-whatsapp">
+                                <span class="form-checkbox-label">
+                                    <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
+                                    Este número tiene WhatsApp
+                                </span>
+                            </label>
                         </div>
 
                         <div class="input-group">
                             <label for="product-desc">Descripción</label>
                             <textarea id="product-desc" rows="3" placeholder="Describe tu producto, calidad, condición…" maxlength="400"></textarea>
+                            <p class="char-counter" id="desc-counter">0 / 400</p>
                         </div>
 
                         <div class="input-group">
@@ -283,16 +318,13 @@
                             </button>
                         </div>
 
-                        <!-- ============ HORARIO (opcional) ============ -->
                         <div class="input-group schedule-group">
                             <label>Horario <span class="optional-tag">Opcional</span></label>
-
                             <button type="button" class="schedule-toggle" id="schedule-toggle" aria-expanded="false">
                                 <i class="fa-regular fa-clock"></i>
                                 <span id="schedule-toggle-text">Agregar horario</span>
                                 <i class="fa-solid fa-chevron-down schedule-chevron"></i>
                             </button>
-
                             <div class="schedule-panel hidden" id="schedule-panel">
                                 <div class="schedule-days" id="schedule-days" role="group" aria-label="Días del horario">
                                     <button type="button" data-day="1">L</button>
@@ -303,7 +335,6 @@
                                     <button type="button" data-day="6">S</button>
                                     <button type="button" data-day="0">D</button>
                                 </div>
-
                                 <div class="schedule-times">
                                     <div class="input-group">
                                         <label for="schedule-start">Desde</label>
@@ -314,7 +345,6 @@
                                         <input type="time" id="schedule-end" value="12:00">
                                     </div>
                                 </div>
-
                                 <button type="button" class="btn-clear-schedule hidden" id="btn-clear-schedule">
                                     <i class="fa-solid fa-trash"></i> Quitar horario
                                 </button>
@@ -322,6 +352,10 @@
                         </div>
 
                         <div id="form-error" class="form-error hidden"></div>
+
+                        <button type="button" class="btn-outline btn-preview" id="btn-preview">
+                            <i class="fa-solid fa-eye"></i> Vista previa
+                        </button>
 
                         <button type="submit" class="btn-primary btn-submit" id="btn-submit">
                             <i class="fa-solid fa-paper-plane"></i> <span id="btn-submit-text">Publicar anuncio</span>
@@ -377,6 +411,7 @@
                 <div class="sheet-content" id="sheet-content">
                     <div class="sheet-category-badge" id="sheet-category"></div>
                     <h2 id="sheet-name" class="sheet-title"></h2>
+                    <div class="sheet-badges-row hidden" id="sheet-badges-row"></div>
                     <p class="sheet-store-name" id="sheet-store"></p>
                     <div class="sheet-price-row">
                         <span id="sheet-price" class="sheet-price"></span>
@@ -411,7 +446,12 @@
                             <i class="fa-solid fa-phone"></i>
                             <span id="sheet-phone"></span>
                         </div>
-                        <a class="btn-outline btn-call" id="sheet-call" href="#"><i class="fa-solid fa-phone"></i> Llamar</a>
+                        <div class="sheet-contact-actions">
+                            <a class="btn-outline btn-call" id="sheet-call" href="#"><i class="fa-solid fa-phone"></i> Llamar</a>
+                            <button class="btn-outline btn-whatsapp hidden" id="sheet-whatsapp" type="button">
+                                <i class="fa-brands fa-whatsapp"></i> WhatsApp
+                            </button>
+                        </div>
                     </div>
 
                     <div class="sheet-actions">
@@ -526,6 +566,72 @@
             </div>
         </div>
 
+        <!-- ============ MODAL VISTA PREVIA ============ -->
+        <div id="preview-modal" class="modal-backdrop hidden">
+            <div class="auth-modal preview-modal-pro">
+                <div class="auth-header">
+                    <h3>Vista previa</h3>
+                    <button class="modal-close" id="preview-close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="preview-body" class="preview-body"></div>
+                <div class="admin-confirm-actions">
+                    <button class="btn-outline" id="preview-back" type="button">Volver a editar</button>
+                    <button class="btn-primary" id="preview-publish" type="button">
+                        <i class="fa-solid fa-paper-plane"></i> Publicar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ MODAL BORRADOR ============ -->
+        <div id="draft-modal" class="modal-backdrop hidden">
+            <div class="auth-modal">
+                <div class="auth-header">
+                    <h3>Borrador guardado</h3>
+                    <button class="modal-close" id="draft-close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <p class="unsaved-text">Encontramos una publicación sin terminar. ¿Quieres continuar donde la dejaste?</p>
+                <div class="admin-confirm-actions">
+                    <button class="btn-outline" id="draft-discard" type="button">Descartar</button>
+                    <button class="btn-primary" id="draft-continue" type="button">
+                        <i class="fa-solid fa-arrow-right"></i> Continuar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ MODAL SALIR SIN GUARDAR ============ -->
+        <div id="unsaved-modal" class="modal-backdrop hidden">
+            <div class="auth-modal">
+                <div class="auth-header">
+                    <h3>Salir sin guardar</h3>
+                    <button class="modal-close" id="unsaved-close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <p class="unsaved-text">Se perderán los cambios realizados en esta publicación.</p>
+                <div class="admin-confirm-actions">
+                    <button class="btn-outline" id="unsaved-cancel" type="button">Cancelar</button>
+                    <button class="btn-primary" id="unsaved-confirm" type="button">
+                        <i class="fa-solid fa-right-from-bracket"></i> Salir
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ MODAL CONFIRMACIÓN GENÉRICA ============ -->
+        <div id="confirm-modal" class="modal-backdrop hidden">
+            <div class="auth-modal">
+                <div class="auth-header">
+                    <h3 id="confirm-title">Confirmar</h3>
+                    <button class="modal-close" id="confirm-close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <p id="confirm-text" class="unsaved-text"></p>
+                <div class="admin-confirm-actions">
+                    <button class="btn-outline" id="confirm-cancel" type="button">Cancelar</button>
+                    <button class="btn-primary" id="confirm-ok" type="button">Confirmar</button>
+                </div>
+            </div>
+        </div>
+
         <!-- ============ MODAL SELLER (quiero vender) ============ -->
         <div id="seller-modal" class="modal-backdrop hidden">
             <div class="auth-modal seller-modal-pro">
@@ -593,6 +699,8 @@
 
 <script src="js/config/firebase-config.js"></script>
 <script src="js/config/config.js"></script>
+<script src="js/config/units.js"></script>
+<script src="js/config/category-config.js"></script>
 
 <script src="js/utils/validators.js"></script>
 <script src="js/utils/formatters.js"></script>
@@ -606,10 +714,14 @@
 <script src="js/services/seller-service.js"></script>
 <script src="js/services/image-service.js"></script>
 <script src="js/services/location-service.js"></script>
+<script src="js/services/connectivity-service.js"></script>
+<script src="js/services/haptics-service.js"></script>
 <script src="js/services/admin-service.js"></script>
 
 <script src="js/components/toast.js"></script>
 <script src="js/components/splash.js"></script>
+<script src="js/components/connectivity-ui.js"></script>
+<script src="js/components/confirm-dialog.js"></script>
 
 <script src="js/features/auth/auth-ui.js"></script>
 <script src="js/features/profile/profile-ui.js"></script>

@@ -1,3 +1,8 @@
+/* =====================================================
+   PIPGO · PROFILE UI
+   Perfil + Ajustes + edición inline de username.
+   ===================================================== */
+
 (function () {
     let profileContent, avatarInput;
     let ownPublications = [];
@@ -7,6 +12,14 @@
 
     let settingsModal, settingsClose;
 
+    /* Refs de edición de username */
+    let usernameDisplayWrap, usernameEditWrap, usernameRowButtons,
+        usernameEditButtons, settingsUsernameValue,
+        btnEditUsername, btnCancelUsernameEdit, btnSaveUsername,
+        usernameEditInput, usernameFeedback;
+    let usernameDebounceTimer = null;
+    let lastCheckedNormalized = '';
+
     /* -----------------------------------------------------
        LOGIN PROMPT
        ----------------------------------------------------- */
@@ -15,9 +28,7 @@
             <header class="profile-header-pro">
                 <div class="profile-header-row">
                     <div class="profile-heading">
-                        <div class="title-row">
-                            <h2>Perfil</h2>
-                        </div>
+                        <div class="title-row"><h2>Perfil</h2></div>
                     </div>
                 </div>
             </header>
@@ -85,9 +96,7 @@
                         <h4>Cuenta suspendida</h4>
                         <p>Tu cuenta de vendedor está suspendida temporalmente.</p>
                     </div>
-                    <button class="seller-action-btn" id="btn-seller-status-action">
-                        Ver
-                    </button>
+                    <button class="seller-action-btn" id="btn-seller-status-action">Ver</button>
                 </div>`;
         }
         if (s === 'approved' && role === 'seller') {
@@ -103,7 +112,6 @@
                     </button>
                 </div>`;
         }
-        // none
         return `
             <div class="seller-status-card state-none" id="seller-status-card">
                 <div class="seller-status-card-icon"><i class="fa-solid fa-store"></i></div>
@@ -111,9 +119,7 @@
                     <h4>¿Quieres vender en PipGo?</h4>
                     <p>Convierte tu cuenta en vendedor y comienza a publicar.</p>
                 </div>
-                <button class="seller-action-btn" id="btn-seller-status-action">
-                    Quiero vender
-                </button>
+                <button class="seller-action-btn" id="btn-seller-status-action">Quiero vender</button>
             </div>`;
     }
 
@@ -122,11 +128,8 @@
         if (!btn) return;
         const s = PermissionService.getSellerStatus();
         btn.addEventListener('click', () => {
-            if (s === 'approved') {
-                NavigationUI.switchView('anunciarme');
-            } else {
-                SellerUI.open();
-            }
+            if (s === 'approved') NavigationUI.switchView('anunciarme');
+            else SellerUI.open();
         });
     }
 
@@ -197,7 +200,6 @@
                             </div>
                             <p class="profile-username">@${Formatters.escapeHtml(profile.username)}</p>
                         </div>
-
                         <div class="profile-avatar-wrap">
                             <div class="profile-avatar" id="profile-avatar">${avatarHtml}</div>
                             <button class="profile-avatar-edit" id="btn-change-avatar" aria-label="Cambiar foto">
@@ -205,7 +207,6 @@
                             </button>
                         </div>
                     </div>
-
                     <div class="profile-stats-pro" role="list">
                         <div class="stat-pro pub" role="listitem">
                             <span class="stat-number">${activeCount}</span>
@@ -221,9 +222,7 @@
                         </div>
                     </div>
                 </header>
-
                 ${renderSellerStatusCard()}
-
                 <div class="profile-tabs" role="tablist">
                     <button class="profile-tab active" data-panel="own" role="tab">
                         <i class="fa-solid fa-box-open"></i> Mis publicaciones
@@ -235,7 +234,6 @@
                         <i class="fa-solid fa-hand-holding-dollar"></i> Ventas
                     </button>
                 </div>
-
                 <div class="profile-panel active" id="panel-own">
                     <div id="user-products-grid" class="products-grid"></div>
                 </div>
@@ -244,8 +242,7 @@
                 </div>
                 <div class="profile-panel" id="panel-sold">
                     <div id="user-sold-grid" class="products-grid"></div>
-                </div>
-            `;
+                </div>`;
 
             renderOwnPublications(ownPublications);
             renderFavoritePublications(favorites);
@@ -256,9 +253,7 @@
             document.getElementById('btn-open-settings').addEventListener('click', () => openSettings(profile));
 
             const adminBtn = document.getElementById('btn-open-admin');
-            if (adminBtn) {
-                adminBtn.addEventListener('click', () => NavigationUI.switchView('admin'));
-            }
+            if (adminBtn) adminBtn.addEventListener('click', () => NavigationUI.switchView('admin'));
 
             document.querySelectorAll('.profile-tab').forEach(tab => {
                 tab.addEventListener('click', () => {
@@ -290,7 +285,7 @@
     }
 
     /* -----------------------------------------------------
-       TARJETA DE PRODUCTO
+       CARD DE PRODUCTO
        ----------------------------------------------------- */
     function buildCard(pub, options = {}) {
         const { withActions = false } = options;
@@ -337,7 +332,9 @@
             ]));
         }
         info.appendChild(DOM.el('h4', {}, [pub.name || '']));
-        info.appendChild(DOM.el('span', { class: 'product-price' }, [Formatters.formatPrice(pub.price)]));
+        info.appendChild(DOM.el('span', { class: 'product-price' }, [
+            Formatters.formatPriceWithUnit(pub.price, pub.unitCode)
+        ]));
 
         if (canManage) {
             const actions = DOM.el('div', { class: 'card-actions' });
@@ -491,13 +488,18 @@
     }
 
     async function markAsSold(pub) {
-        const confirmed = window.confirm(
-            `¿Marcar "${pub.name}" como vendido?\n\n` +
-            `Aparecerá como vendido en tu perfil durante 24 horas y luego se ocultará automáticamente.`
-        );
+        const confirmed = await ConfirmDialog.open({
+            title: 'Marcar como vendido',
+            text: `¿Marcar "${pub.name}" como vendido?\n\n` +
+                  `Aparecerá como vendido en tu perfil durante 24 horas y luego se ocultará automáticamente.`,
+            okText: 'Sí, marcar vendido',
+            cancelText: 'Cancelar'
+        });
         if (!confirmed) return;
+
         try {
             await PublicationService.markAsSold(pub.id);
+            if (window.HapticsService) HapticsService.success();
             Toast.success('¡Publicación marcada como vendida!');
             await PublicationUI.loadPublications();
             renderProfile();
@@ -529,9 +531,9 @@
         }
     }
 
-    /* -----------------------------------------------------
+    /* =====================================================
        AJUSTES
-       ----------------------------------------------------- */
+       ===================================================== */
     function openSettings(profile) {
         const email = profile.email || (AppState.currentUser && AppState.currentUser.email) || '—';
         const list = document.getElementById('settings-list');
@@ -540,13 +542,46 @@
             <div class="settings-group">
                 <span class="settings-group-title">Cuenta</span>
                 <div class="settings-group-card">
-                    <div class="settings-row">
+
+                    <div class="settings-row settings-username-row">
                         <div class="s-icon tone-coffee"><i class="fa-solid fa-at"></i></div>
-                        <div class="s-text">
+
+                        <div class="s-text" id="username-display-wrap">
                             <span class="s-label">Username</span>
-                            <span class="s-value">@${Formatters.escapeHtml(profile.username || '')}</span>
+                            <span class="s-value" id="settings-username-value">@${Formatters.escapeHtml(profile.username || '')}</span>
+                        </div>
+
+                        <div class="s-text hidden" id="username-edit-wrap">
+                            <span class="s-label">Nuevo username</span>
+                            <div class="username-input-wrap">
+                                <span class="username-input-prefix">@</span>
+                                <input type="text" id="username-edit-input" maxlength="20"
+                                       autocomplete="off" autocapitalize="off"
+                                       spellcheck="false" inputmode="text">
+                            </div>
+                        </div>
+
+                        <div class="settings-row-buttons" id="username-row-buttons">
+                            <button class="settings-row-action-btn" id="btn-edit-username"
+                                    type="button" aria-label="Editar username" title="Editar username">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                        </div>
+
+                        <div class="settings-row-buttons hidden" id="username-edit-buttons">
+                            <button class="settings-row-action-btn" id="btn-cancel-username-edit"
+                                    type="button" aria-label="Cancelar" title="Cancelar">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                            <button class="settings-row-action-btn primary" id="btn-save-username"
+                                    type="button" disabled aria-label="Guardar" title="Guardar">
+                                <i class="fa-solid fa-check"></i>
+                            </button>
                         </div>
                     </div>
+
+                    <p class="username-feedback hidden" id="username-feedback"></p>
+
                     <div class="settings-row">
                         <div class="s-icon tone-warm"><i class="fa-solid fa-envelope"></i></div>
                         <div class="s-text">
@@ -580,6 +615,31 @@
             </div>
         `;
 
+        usernameDisplayWrap    = document.getElementById('username-display-wrap');
+        usernameEditWrap       = document.getElementById('username-edit-wrap');
+        usernameRowButtons     = document.getElementById('username-row-buttons');
+        usernameEditButtons    = document.getElementById('username-edit-buttons');
+        settingsUsernameValue  = document.getElementById('settings-username-value');
+        btnEditUsername        = document.getElementById('btn-edit-username');
+        btnCancelUsernameEdit  = document.getElementById('btn-cancel-username-edit');
+        btnSaveUsername        = document.getElementById('btn-save-username');
+        usernameEditInput      = document.getElementById('username-edit-input');
+        usernameFeedback       = document.getElementById('username-feedback');
+
+        btnEditUsername.addEventListener('click', startUsernameEdit);
+        btnCancelUsernameEdit.addEventListener('click', cancelUsernameEdit);
+        btnSaveUsername.addEventListener('click', saveUsername);
+        usernameEditInput.addEventListener('input', onUsernameInput);
+        usernameEditInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (!btnSaveUsername.disabled) saveUsername();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelUsernameEdit();
+            }
+        });
+
         const logoutBtn = document.getElementById('btn-logout-pro');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', async () => {
@@ -596,7 +656,169 @@
         settingsModal.classList.remove('hidden');
     }
 
-    function closeSettings() { settingsModal.classList.add('hidden'); }
+    /* -----------------------------------------------------
+       EDICIÓN DE USERNAME
+       ----------------------------------------------------- */
+    function setUsernameFeedback(text, kind) {
+        if (!usernameFeedback) return;
+        if (!text) {
+            usernameFeedback.classList.add('hidden');
+            usernameFeedback.textContent = '';
+            usernameFeedback.className = 'username-feedback hidden';
+            return;
+        }
+        usernameFeedback.classList.remove('hidden');
+        usernameFeedback.className = 'username-feedback' + (kind ? ' ' + kind : '');
+        usernameFeedback.textContent = text;
+    }
+
+    function enterEditMode() {
+        usernameDisplayWrap.classList.add('hidden');
+        usernameRowButtons.classList.add('hidden');
+        usernameEditWrap.classList.remove('hidden');
+        usernameEditButtons.classList.remove('hidden');
+    }
+
+    function exitEditMode() {
+        usernameDisplayWrap.classList.remove('hidden');
+        usernameRowButtons.classList.remove('hidden');
+        usernameEditWrap.classList.add('hidden');
+        usernameEditButtons.classList.add('hidden');
+    }
+
+    function startUsernameEdit() {
+        const profile = AppState.currentProfile;
+        if (!profile) return;
+
+        usernameEditInput.value = profile.username || '';
+        lastCheckedNormalized = '';
+        btnSaveUsername.disabled = true;
+        setUsernameFeedback('', '');
+
+        enterEditMode();
+
+        setTimeout(() => {
+            usernameEditInput.focus();
+            const len = usernameEditInput.value.length;
+            try { usernameEditInput.setSelectionRange(len, len); } catch (e) {}
+        }, 30);
+    }
+
+    function cancelUsernameEdit() {
+        clearTimeout(usernameDebounceTimer);
+        usernameDebounceTimer = null;
+        lastCheckedNormalized = '';
+        if (usernameEditInput) usernameEditInput.value = '';
+        setUsernameFeedback('', '');
+        if (btnSaveUsername) btnSaveUsername.disabled = true;
+        exitEditMode();
+    }
+
+    function onUsernameInput() {
+        clearTimeout(usernameDebounceTimer);
+
+        const raw = String(usernameEditInput.value || '').trim();
+        const normalized = Validators.normalizeUsername(raw);
+        const currentNormalized = (AppState.currentProfile && AppState.currentProfile.usernameNormalized) || '';
+
+        lastCheckedNormalized = '';
+        btnSaveUsername.disabled = true;
+
+        if (!raw) { setUsernameFeedback('', ''); return; }
+
+        if (normalized === currentNormalized) {
+            setUsernameFeedback('Es tu username actual.', 'checking');
+            return;
+        }
+
+        const v = Validators.validateUsername(raw);
+        if (!v.valid) { setUsernameFeedback(v.error, 'err'); return; }
+
+        setUsernameFeedback('Verificando disponibilidad…', 'checking');
+
+        usernameDebounceTimer = setTimeout(async () => {
+            if (Validators.normalizeUsername(usernameEditInput.value) !== normalized) return;
+
+            try {
+                const available = await UserService.isUsernameAvailable(
+                    normalized,
+                    AppState.currentUser.uid
+                );
+
+                if (Validators.normalizeUsername(usernameEditInput.value) !== normalized) return;
+
+                if (available) {
+                    lastCheckedNormalized = normalized;
+                    btnSaveUsername.disabled = false;
+                    setUsernameFeedback('Disponible', 'ok');
+                } else {
+                    setUsernameFeedback('Ese username ya está en uso.', 'err');
+                }
+            } catch (e) {
+                Logger.error('Error verificando username', e);
+                setUsernameFeedback('No pudimos verificar la disponibilidad.', 'err');
+            }
+        }, 450);
+    }
+
+    async function saveUsername() {
+        const raw = String(usernameEditInput.value || '').trim();
+        const v = Validators.validateUsername(raw);
+        if (!v.valid) { setUsernameFeedback(v.error, 'err'); return; }
+
+        const normalized = Validators.normalizeUsername(v.value);
+        if (normalized !== lastCheckedNormalized) {
+            setUsernameFeedback('Verifica la disponibilidad antes de guardar.', 'err');
+            return;
+        }
+
+        btnSaveUsername.disabled = true;
+        const originalIcon = btnSaveUsername.innerHTML;
+        btnSaveUsername.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+        try {
+            const result = await UserService.changeUsername(AppState.currentUser.uid, raw);
+
+            if (result.changed) {
+                AppState.currentProfile.username = result.username;
+                AppState.currentProfile.usernameNormalized = result.normalized;
+
+                if (settingsUsernameValue) {
+                    settingsUsernameValue.textContent = '@' + result.username;
+                }
+
+                refreshHomeGreeting();
+                renderProfile();
+
+                Toast.success('Username actualizado.');
+            } else {
+                Toast.info('Tu username no cambió.');
+            }
+
+            cancelUsernameEdit();
+        } catch (error) {
+            Logger.error('Error cambiando username', error);
+            setUsernameFeedback(error.message || 'No pudimos actualizar el username.', 'err');
+        } finally {
+            btnSaveUsername.innerHTML = originalIcon;
+        }
+    }
+
+    function refreshHomeGreeting() {
+        const el = document.getElementById('home-greeting');
+        if (!el || !AppState.currentProfile || !AppState.currentProfile.username) return;
+        const hour = new Date().getHours();
+        const prefix = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
+        el.textContent = `${prefix}, ${AppState.currentProfile.username}`;
+    }
+
+    function closeSettings() {
+        clearTimeout(usernameDebounceTimer);
+        usernameDebounceTimer = null;
+        lastCheckedNormalized = '';
+        settingsModal.classList.add('hidden');
+    }
+
     function isSettingsModalOpen() {
         return settingsModal && !settingsModal.classList.contains('hidden');
     }
