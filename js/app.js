@@ -90,7 +90,11 @@
             });
         }
 
-        setTimeout(detectAndUpdateCity, 800);
+        // Solo intentar refrescar si no hay caché reciente,
+        // evitando gastar GPS innecesariamente.
+        if (!cached) {
+            setTimeout(detectAndUpdateCity, 800);
+        }
     }
 
     function initHomeHeaderScroll() {
@@ -256,7 +260,6 @@
                 }
             } else {
                 AppState.resetSession();
-                // Cortamos la suscripción realtime de Home al cerrar sesión.
                 if (wasAuthenticated && window.PublicationUI &&
                     PublicationUI.stopHomeSubscription) {
                     PublicationUI.stopHomeSubscription();
@@ -274,6 +277,69 @@
         });
     }
 
+    /* =====================================================
+       HANDLER GLOBAL DE ESCAPE
+       Cierra overlays en orden de jerarquía. Los modales
+       con lógica propia (ConfirmDialog) gestionan su
+       Escape por su cuenta y NO se tocan aquí.
+       ===================================================== */
+    function initGlobalEscapeHandler() {
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+
+            // Orden: overlays superpuestos primero.
+            if (window.PublicationUI) {
+                if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
+                    e.preventDefault();
+                    PublicationUI.closeLightbox();
+                    return;
+                }
+                if (PublicationUI.isProductSheetOpen && PublicationUI.isProductSheetOpen()) {
+                    e.preventDefault();
+                    PublicationUI.closeProductSheet();
+                    return;
+                }
+                if (PublicationUI.isPreviewModalOpen && PublicationUI.isPreviewModalOpen()) {
+                    e.preventDefault();
+                    PublicationUI.closePreview();
+                    return;
+                }
+                if (PublicationUI.isFilterModalOpen && PublicationUI.isFilterModalOpen()) {
+                    e.preventDefault();
+                    PublicationUI.closeFilterModal();
+                    return;
+                }
+            }
+
+            if (window.AdminUI && AdminUI.isConfirmModalOpen && AdminUI.isConfirmModalOpen()) {
+                e.preventDefault();
+                AdminUI.closeConfirm();
+                return;
+            }
+
+            if (window.AuthUI && AuthUI.isAuthModalOpen && AuthUI.isAuthModalOpen()) {
+                e.preventDefault();
+                AuthUI.closeAuthModal();
+                return;
+            }
+
+            if (window.ProfileUI && ProfileUI.isSettingsModalOpen && ProfileUI.isSettingsModalOpen()) {
+                e.preventDefault();
+                ProfileUI.closeSettings();
+                return;
+            }
+
+            // Modales sin lógica colateral: se cierran directo.
+            ['draft-modal', 'seller-modal'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el.classList.contains('hidden')) {
+                    e.preventDefault();
+                    el.classList.add('hidden');
+                }
+            });
+        });
+    }
+
     async function bootstrap() {
         try {
             ConnectivityService.init();
@@ -287,6 +353,7 @@
             initLocationHeader();
             initHomeHeaderScroll();
             initPullToRefresh();
+            initGlobalEscapeHandler();
             initializeAuthObserver();
             PublicationUI.loadPublications();
             ConnectivityUI.init();

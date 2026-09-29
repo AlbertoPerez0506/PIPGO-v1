@@ -322,6 +322,8 @@
 
 /* =====================================================
    10) TEXTO EN MODALES DE BORRADOR / SALIR SIN GUARDAR
+   FIX: incluye white-space: pre-line para que los \n
+   se rendericen incluso si components.css no cargó.
    ===================================================== */
 .unsaved-text {
     font-size: 14px;
@@ -329,4 +331,5 @@
     line-height: 1.5;
     margin: 0 0 16px;
     padding: 0 2px;
+    white-space: pre-line;
 }

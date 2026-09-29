@@ -56,5 +56,7 @@ window.AppState = {
         this.pendingAction = null;
         this.hasPendingHomeUpdates = false;
         this.pendingHomePublications = [];
+        // FIX: limpiar filtros activos para que no persistan entre sesiones.
+        this.activeCategoryFilter = '';
     }
 };

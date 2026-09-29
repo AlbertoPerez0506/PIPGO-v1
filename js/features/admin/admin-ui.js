@@ -463,27 +463,34 @@
 
     /* =====================================================
        ENTRAR AL PANEL
+       FIX: reemplaza setTimeout(120) por polling con
+       reintentos, resistente a latencias de red.
        ===================================================== */
     function onEnterAdmin() {
-        if (!AppState.currentUser) {
-            setTimeout(() => {
-                if (!AppState.currentUser || !AdminService.isAdmin()) {
-                    Toast.error('No tienes permisos para acceder.');
-                    NavigationUI.switchView('home');
-                    return;
-                }
-                renderAdminPanel();
-            }, 120);
+        waitForAuthThenEnter(0);
+    }
+
+    function waitForAuthThenEnter(attempt) {
+        const MAX_ATTEMPTS = 12;   // ~1.2s máximo
+        const INTERVAL_MS = 100;
+
+        if (AppState.currentUser) {
+            if (!AdminService.isAdmin()) {
+                Toast.error('No tienes permisos para acceder.');
+                NavigationUI.switchView('home');
+                return;
+            }
+            renderAdminPanel();
             return;
         }
 
-        if (!AdminService.isAdmin()) {
+        if (attempt >= MAX_ATTEMPTS) {
             Toast.error('No tienes permisos para acceder.');
             NavigationUI.switchView('home');
             return;
         }
 
-        renderAdminPanel();
+        setTimeout(() => waitForAuthThenEnter(attempt + 1), INTERVAL_MS);
     }
 
     function renderAdminPanel() {

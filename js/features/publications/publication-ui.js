@@ -14,7 +14,7 @@
     let publicationForm, stepType, typeCalle, typeEstablecimiento, btnBackType;
     let btnGetLocation, productRefInput, btnSubmit, btnSubmitText, formError;
     let loginRequired, formWrapper, productsGrid, searchResults, searchInput;
-    let clearSearch, searchSuggestions, suggestionChips;
+    let clearSearch, searchSuggestions, suggestionChips, searchSubtitle;
     let sheetBackdrop, productSheet;
     let sheetDragZone, galleryTrack, galleryDots, galleryClose, galleryPrev, galleryNext;
     let sheetCategory, sheetName, sheetStore, sheetPrice, sheetTime, sheetDesc;
@@ -24,6 +24,7 @@
     let btnDirections, sheetMapLink, btnChatV2;
 
     let productHasWhatsappInput;
+    let productPriceInput;
 
     let productCategorySelect;
     let unitGroup, productUnitSelect, unitHint;
@@ -124,6 +125,35 @@
         const ta = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
         const tb = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
         return tb - ta;
+    }
+
+    /* =====================================================
+       FIX: BADGE DE FILTROS ACTIVOS
+       Se actualiza cada vez que cambian los filtros.
+       ===================================================== */
+    function updateFilterBadge() {
+        const badge = document.getElementById('filter-badge');
+        if (!badge) return;
+        const hasFilters = !!(activeFilterCategory || activeFilterSeller);
+        badge.classList.toggle('hidden', !hasFilters);
+    }
+
+    /* =====================================================
+       FIX: SUBTÍTULO DINÁMICO EN SEARCH
+       Refleja la cantidad de resultados y la consulta activa.
+       ===================================================== */
+    function updateSearchSubtitle() {
+        if (!searchSubtitle) return;
+        const query = searchInput ? searchInput.value.trim() : '';
+        const count = searchResults ? searchResults.querySelectorAll('.product-card').length : 0;
+
+        if (query) {
+            searchSubtitle.textContent = `${count} resultado${count === 1 ? '' : 's'} para "${query}"`;
+        } else if (activeFilterCategory || activeFilterSeller) {
+            searchSubtitle.textContent = `${count} resultado${count === 1 ? '' : 's'} con filtros`;
+        } else {
+            searchSubtitle.textContent = 'Descubre productos cerca de ti';
+        }
     }
 
     /* =====================================================
@@ -537,9 +567,11 @@
         if (actionId === 'empty-clear-search') {
             const b = document.getElementById(actionId);
             if (b) b.addEventListener('click', () => {
-                searchInput.value = '';
-                clearSearch.classList.remove('visible');
-                searchSuggestions.style.display = 'block';
+                if (searchInput) {
+                    searchInput.value = '';
+                }
+                if (clearSearch) clearSearch.classList.remove('visible');
+                if (searchSuggestions) searchSuggestions.style.display = 'block';
                 handleSearchInput();
             });
         } else if (actionId === 'empty-clear-filters') {
@@ -552,6 +584,7 @@
                 if (clearSearch) clearSearch.classList.remove('visible');
                 renderCategoriesScroll();
                 renderFilterChips();
+                updateFilterBadge();
                 renderHomeFilters(AppState.currentPublications);
                 renderSearchResults(AppState.currentPublications);
             });
@@ -562,6 +595,7 @@
                 activeFilterCategory = '';
                 renderHomeFilters(AppState.currentPublications);
                 renderCategoriesScroll();
+                updateFilterBadge();
                 rerenderHome();
             });
         } else if (actionId === 'empty-go-publish') {
@@ -596,7 +630,10 @@
         FavoriteUI.updateAllButtons();
     }
 
-    function renderSearchResults(list) { renderProducts(searchResults, list); }
+    function renderSearchResults(list) {
+        renderProducts(searchResults, list);
+        updateSearchSubtitle();
+    }
 
     function showAllPublications() {
         searchInput.value = '';
@@ -607,12 +644,14 @@
         activeFilterSeller = '';
         renderFilterChips();
         renderCategoriesScroll();
+        updateFilterBadge();
         renderSearchResults(AppState.currentPublications);
     }
 
     function onEnterSearch() {
         renderCategoriesScroll();
         renderFilterChips();
+        updateFilterBadge();
     }
 
     function onEnterHome() {
@@ -682,6 +721,7 @@
             ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
             : AppState.currentPublications;
         renderProducts(productsGrid, list);
+        updateFilterBadge();
 
         if (AppState.currentView === 'search') {
             renderCategoriesScroll();
@@ -705,6 +745,7 @@
             renderCategoriesScroll();
             renderSearchResults(getFilteredList());
             renderFilterChips();
+            updateFilterBadge();
         });
         scroll.appendChild(allBtn);
 
@@ -718,6 +759,7 @@
                 renderCategoriesScroll();
                 renderSearchResults(getFilteredList());
                 renderFilterChips();
+                updateFilterBadge();
             });
             scroll.appendChild(btn);
         });
@@ -735,10 +777,12 @@
             chip.addEventListener('click', () => {
                 activeFilterSeller = '';
                 renderFilterChips();
+                updateFilterBadge();
                 renderSearchResults(getFilteredList());
             });
             row.appendChild(chip);
         }
+        updateFilterBadge();
     }
 
     /* =====================================================
@@ -784,6 +828,7 @@
         closeFilterModal();
         renderCategoriesScroll();
         renderFilterChips();
+        updateFilterBadge();
         handleSearchInput();
     }
 
@@ -1001,7 +1046,7 @@
 
     function updatePriceHint() {
         if (!unitHint) return;
-        const rawPrice = document.getElementById('product-price').value;
+        const rawPrice = productPriceInput ? productPriceInput.value : '';
         const price = Formatters.sanitizePriceInput(rawPrice);
         const unit = readUnitCode();
         if (!price) {
@@ -1132,7 +1177,7 @@
             storeName: (document.getElementById('store-name').value || '').trim(),
             category: productCategorySelect.value || '',
             name: (document.getElementById('product-name').value || '').trim(),
-            price: Formatters.sanitizePriceInput(document.getElementById('product-price').value),
+            price: Formatters.sanitizePriceInput(productPriceInput ? productPriceInput.value : ''),
             unitCode: readUnitCode(),
             condition: readCondition(),
             presentation: readPresentation(),
@@ -1201,7 +1246,7 @@
         onCategoryChange();
 
         if (draft.name) document.getElementById('product-name').value = draft.name;
-        if (draft.price) document.getElementById('product-price').value = draft.price;
+        if (draft.price && productPriceInput) productPriceInput.value = draft.price;
 
         if (draft.unitCode) {
             const exists = [...productUnitSelect.options].some(o => o.value === draft.unitCode);
@@ -1423,7 +1468,7 @@
             storeName: document.getElementById('store-name').value.trim(),
             category: productCategorySelect.value || '',
             name: document.getElementById('product-name').value.trim(),
-            price: Formatters.sanitizePriceInput(document.getElementById('product-price').value),
+            price: Formatters.sanitizePriceInput(productPriceInput ? productPriceInput.value : ''),
             unitCode: readUnitCode(),
             condition: readCondition(),
             presentation: readPresentation(),
@@ -1443,6 +1488,8 @@
 
     /* =====================================================
        SUBMIT
+       FIX: best-effort en el manejo de fallos para
+       reconocer y loguear imágenes huérfanas.
        ===================================================== */
     async function handleSubmit(e) {
         e.preventDefault();
@@ -1484,6 +1531,9 @@
         AppState.isSubmitting = true;
         btnSubmit.disabled = true;
 
+        // FIX: registrar URLs subidas para poder reportar huérfanas en logs.
+        const uploadedUrls = [];
+
         try {
             let location = AppState.currentLocation;
 
@@ -1509,6 +1559,7 @@
                 setSubmitButton('Subiendo imagen…', 'fa-cloud-arrow-up');
                 const upload = await ImageService.uploadImageToCloudinary(mainSlot.blob);
                 mainUrl = upload.secure_url;
+                uploadedUrls.push({ url: mainUrl, publicId: upload.public_id });
             }
 
             const imageUrls = [];
@@ -1518,6 +1569,7 @@
                     setSubmitButton('Subiendo imágenes…', 'fa-cloud-arrow-up');
                     const upload = await ImageService.uploadImageToCloudinary(slot.blob);
                     imageUrls.push(upload.secure_url);
+                    uploadedUrls.push({ url: upload.secure_url, publicId: upload.public_id });
                 }
             }
 
@@ -1572,6 +1624,14 @@
             NavigationUI.switchView('home');
 
         } catch (error) {
+            // FIX: si quedaron URLs subidas sin publicar, dejamos rastro
+            // para poder limpiarlas manualmente en Cloudinary si es necesario.
+            if (uploadedUrls.length) {
+                Logger.warn('Imágenes subidas sin publicación (posibles huérfanas)', {
+                    context: 'publication.submit',
+                    urls: uploadedUrls.map(u => u.url)
+                });
+            }
             const msg = ErrorHandler.toUserMessage(error, { context: 'publication.submit' });
             showFormError(msg);
         } finally {
@@ -1629,7 +1689,7 @@
         document.getElementById('store-name').value = pub.storeName || '';
         productCategorySelect.value = pub.category || '';
         document.getElementById('product-name').value = pub.name || '';
-        document.getElementById('product-price').value = pub.price || '';
+        if (productPriceInput) productPriceInput.value = pub.price || '';
         document.getElementById('product-phone').value = pub.phone || '';
         descriptionInput.value = pub.description || '';
         document.getElementById('product-extra-refs').value = pub.extraRefs || '';
@@ -1906,8 +1966,11 @@
     }
 
     let galStartX = 0, galCurX = 0, galSwiping = false;
+
+    /* FIX: acepta mouse y touch. Antes solo touch, lo que rompía
+       el drag horizontal de la galería en desktop. */
     function handleGalleryPointerDown(e) {
-        if (e.pointerType !== 'touch') return;
+        if (e.pointerType === 'pen') return;
         galSwiping = true;
         galStartX = e.clientX; galCurX = e.clientX;
         galleryTrack.style.transition = 'none';
@@ -2134,6 +2197,7 @@
         clearSearch = document.getElementById('clear-search');
         searchSuggestions = document.getElementById('search-suggestions');
         suggestionChips = document.getElementById('suggestion-chips');
+        searchSubtitle = document.getElementById('search-subtitle');
         sheetBackdrop = document.getElementById('sheet-backdrop');
         productSheet = document.getElementById('product-sheet');
         sheetDragZone = document.getElementById('sheet-drag-zone');
@@ -2163,6 +2227,7 @@
         btnChatV2 = document.getElementById('btn-chat-v2');
 
         productHasWhatsappInput = document.getElementById('product-has-whatsapp');
+        productPriceInput = document.getElementById('product-price');
 
         productCategorySelect = document.getElementById('product-category');
         unitGroup = document.getElementById('unit-group');
@@ -2221,11 +2286,12 @@
         filterCategory = document.getElementById('filter-category');
         filterSeller = document.getElementById('filter-seller');
 
-        const priceInput = document.getElementById('product-price');
-        priceInput.addEventListener('input', (e) => {
-            e.target.value = Formatters.sanitizePriceInput(e.target.value);
-            updatePriceHint();
-        });
+        if (productPriceInput) {
+            productPriceInput.addEventListener('input', (e) => {
+                e.target.value = Formatters.sanitizePriceInput(e.target.value);
+                updatePriceHint();
+            });
+        }
 
         typeCalle.addEventListener('click', () => selectSellerType(typeCalle));
         typeEstablecimiento.addEventListener('click', () => selectSellerType(typeEstablecimiento));
@@ -2390,6 +2456,7 @@
         lightboxTrack.addEventListener('pointercancel', handleLightboxUp);
 
         updateDescriptionCounter();
+        updateFilterBadge();
 
         window.addEventListener('beforeunload', (e) => {
             if (hasUnsavedChanges()) {

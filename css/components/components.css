@@ -353,10 +353,12 @@
 .btn-clear-schedule.hidden { display: none; }
 
 /* ---------- Photo gallery (publicar) ---------- */
+/* FIX: grid-auto-rows garantiza altura de la fila 3 donde caen los slots 4 y 5 */
 .photo-gallery {
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 120px 120px;
+    grid-auto-rows: 120px;
     gap: 10px;
 }
 .photo-slot {
@@ -998,5 +1000,7 @@
     box-shadow: 0 4px 12px rgba(185, 28, 28, 0.2);
 }
 
-/* Saltos de línea en textos de modales */
+/* Saltos de línea en textos de modales.
+   Las reglas tipográficas viven en settings-extras.css.
+   Aquí solo lo esencial del comportamiento. */
 .unsaved-text { white-space: pre-line; }
