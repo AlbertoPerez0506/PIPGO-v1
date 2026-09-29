@@ -10,6 +10,7 @@
         ProfileUI.init();
         PublicationUI.init();
         FavoriteUI.init();
+        SellerUI.init();
     }
 
     function getTimeGreeting() {
@@ -50,9 +51,7 @@
                 updateLocationChip(cityName);
                 return;
             }
-        } catch (e) {
-            // silencioso: probablemente no dio permiso
-        }
+        } catch (e) {}
 
         const cached = Storage.get('user_city', null);
         if (cached) {
@@ -85,10 +84,7 @@
     }
 
     /* =====================================================
-       SCROLL INTELIGENTE DEL HEADER (home)
-       - Oculta el hero al hacer scroll hacia abajo
-       - Lo muestra al hacer scroll hacia arriba
-       - El buscador y los chips permanecen visibles
+       SCROLL INTELIGENTE DEL HEADER
        ===================================================== */
     function initHomeHeaderScroll() {
         const main = document.getElementById('main-content');
@@ -98,8 +94,8 @@
 
         let lastY = 0;
         let ticking = false;
-        const THRESHOLD = 6;    // px para considerar cambio de dirección
-        const MIN_Y = 60;       // no ocultar antes de scrollear 60px
+        const THRESHOLD = 6;
+        const MIN_Y = 60;
 
         function reset() {
             header.classList.remove('hero-hidden');
@@ -134,8 +130,28 @@
             });
         }, { passive: true });
 
-        // Expuesto para que NavigationUI lo llame al cambiar de vista
         window.PipGoHomeHeader = { reset };
+    }
+
+    /* =====================================================
+       JUST-IN-TIME AUTH · Ejecutar acción pendiente
+       ===================================================== */
+    function runPendingAction() {
+        const action = AppState.pendingAction;
+        AppState.pendingAction = null;
+        if (!action) return;
+
+        switch (action.type) {
+            case 'toggleFavorite':
+                if (window.FavoriteUI) FavoriteUI.toggleFavorite(action.publicationId);
+                break;
+            case 'openChat':
+                Toast.info('Los mensajes directos llegarán en la V2.');
+                break;
+            case 'openSellerForm':
+                if (window.SellerUI) SellerUI.open();
+                break;
+        }
     }
 
     /* =====================================================
@@ -162,6 +178,10 @@
             PublicationUI.updateAuthUI();
             ProfileUI.renderProfile();
             FavoriteUI.updateAllButtons();
+
+            if (user && AppState.pendingAction) {
+                setTimeout(runPendingAction, 180);
+            }
         });
     }
 

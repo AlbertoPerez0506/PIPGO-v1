@@ -1,0 +1,269 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.admin == true;
+    }
+
+    function isApprovedSeller(uid) {
+      return signedIn()
+        && request.auth.uid == uid
+        && get(/databases/$(database)/documents/usuarios/$(uid)).data.active == true
+        && get(/databases/$(database)/documents/usuarios/$(uid)).data.role == "seller"
+        && get(/databases/$(database)/documents/usuarios/$(uid)).data.sellerStatus == "approved";
+    }
+
+    // ============================================================
+    // USUARIOS
+    // ============================================================
+    match /usuarios/{uid} {
+
+      allow read: if isOwner(uid) || isAdmin();
+
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.role == "user"
+        && request.resource.data.sellerStatus == "none"
+        && request.resource.data.active == true
+        && request.resource.data.admin == false
+        && request.resource.data.username is string
+        && request.resource.data.username.size() >= 3
+        && request.resource.data.username.size() <= 20
+        && request.resource.data.usernameNormalized is string
+        && request.resource.data.email is string
+        && request.resource.data.avatarUrl is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      allow update: if isAdmin()
+        || (
+          isOwner(uid)
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.username == resource.data.username
+          && request.resource.data.usernameNormalized == resource.data.usernameNormalized
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.active == resource.data.active
+          && request.resource.data.admin == resource.data.admin
+          && request.resource.data.createdAt == resource.data.createdAt
+          && (
+            request.resource.data.sellerStatus == resource.data.sellerStatus
+            || (resource.data.sellerStatus in ["none","rejected"]
+                && request.resource.data.sellerStatus == "pending")
+          )
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(["avatarUrl","updatedAt","sellerStatus"])
+        );
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // PERFILES PÚBLICOS
+    // ============================================================
+    match /perfilesPublicos/{uid} {
+
+      allow read: if true;
+
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.username is string
+        && request.resource.data.usernameNormalized is string
+        && request.resource.data.avatarUrl is string;
+
+      allow update: if isAdmin()
+        || (
+          isOwner(uid)
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.username == resource.data.username
+          && request.resource.data.usernameNormalized == resource.data.usernameNormalized
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["avatarUrl"])
+        );
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // USERNAMES
+    // ============================================================
+    match /usernames/{normalized} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.uid is string
+        && request.resource.data.username is string
+        && request.resource.data.createdAt is timestamp;
+      allow update, delete: if false;
+    }
+
+    // ============================================================
+    // FAVORITOS
+    // ============================================================
+    match /usuarios/{uid}/favoritos/{publicationId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.publicationId == publicationId
+        && request.resource.data.createdAt is timestamp
+        && exists(/databases/$(database)/documents/publicaciones/$(publicationId));
+
+      allow update: if false;
+      allow delete: if isOwner(uid);
+    }
+
+    // ============================================================
+    // SOLICITUDES DE VENDEDOR
+    // ============================================================
+    match /solicitudesVendedor/{uid} {
+
+      allow read: if isOwner(uid) || isAdmin();
+
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.termsAccepted == true
+        && request.resource.data.sellerType in ["person", "business"]
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 2
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.businessName is string
+        && request.resource.data.category is string
+        && request.resource.data.category.size() <= 80
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 1000
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 30
+        && request.resource.data.city is string
+        && request.resource.data.state is string
+        && request.resource.data.socialUrl is string
+        && request.resource.data.contactMethod in ["phone", "whatsapp"]
+        && request.resource.data.submittedAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.rejectionReason == null;
+
+      allow update: if isAdmin()
+        || (
+          isOwner(uid)
+          && resource.data.status in ["pending", "rejected"]
+          && request.resource.data.status in ["pending", "rejected"]
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly([
+                 "sellerType","displayName","businessName","category",
+                 "description","phone","city","state","socialUrl",
+                 "contactMethod","termsAccepted","status","updatedAt"
+               ])
+        );
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // PUBLICACIONES
+    // ============================================================
+    match /publicaciones/{publicationId} {
+
+      allow read: if
+        resource.data.status == "active"
+        || (signedIn() && resource.data.userId == request.auth.uid)
+        || (
+          signedIn()
+          && resource.data.status == "sold"
+          && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)/favoritos/$(publicationId))
+        );
+
+      allow create: if isApprovedSeller(request.auth.uid)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == "active"
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.price is string
+        && request.resource.data.category is string
+        && request.resource.data.category.size() <= 80
+        && request.resource.data.mainImage is string
+        && request.resource.data.mainImage.size() > 0
+        && request.resource.data.images is list
+        && request.resource.data.storeName is string
+        && request.resource.data.phone is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.soldAt == null;
+
+      allow update: if isApprovedSeller(resource.data.userId)
+        && request.auth.uid == resource.data.userId
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (
+          (resource.data.status == "active"
+            && request.resource.data.status in ["active", "sold", "deleted"])
+          || (resource.data.status == "sold"
+            && request.resource.data.status == "deleted")
+          || (resource.data.status == "deleted"
+            && request.resource.data.status == "deleted")
+        )
+        && (
+          (request.resource.data.status == "sold"
+            && request.resource.data.soldAt is timestamp)
+          || (request.resource.data.status == "active"
+            && request.resource.data.soldAt == null)
+          || (request.resource.data.status == "deleted")
+        );
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // CONVERSACIONES (preparadas para V2)
+    // ============================================================
+    match /conversaciones/{conversationId} {
+
+      allow read: if signedIn()
+        && request.auth.uid in resource.data.participantIds;
+
+      allow create: if signedIn()
+        && request.resource.data.buyerId == request.auth.uid
+        && request.resource.data.sellerId != request.auth.uid
+        && request.resource.data.participantIds is list
+        && request.resource.data.participantIds.size() == 2
+        && request.auth.uid in request.resource.data.participantIds
+        && request.resource.data.sellerId in request.resource.data.participantIds;
+
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.participantIds
+        && request.resource.data.buyerId == resource.data.buyerId
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.participantIds == resource.data.participantIds
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["updatedAt","lastMessagePreview","lastMessageSenderId"]);
+
+      allow delete: if false;
+
+      match /mensajes/{messageId} {
+        allow read: if signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversaciones/$(conversationId)).data.participantIds;
+
+        allow create: if signedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAt is timestamp;
+
+        allow update, delete: if false;
+      }
+    }
+  }
+}

@@ -1,12 +1,12 @@
 /* =====================================================
    PIPGO · APP STATE
-   Estado global compartido entre features.
    ===================================================== */
 
 window.AppState = {
     /* ---------- Sesión ---------- */
     currentUser: null,
     currentProfile: null,
+    currentPublicProfile: null,
 
     /* ---------- Datos ---------- */
     currentPublications: [],
@@ -17,10 +17,10 @@ window.AppState = {
     currentProduct: null,
 
     /* ---------- Ubicación ---------- */
-    currentLocation: null,        // Ubicación usada para la publicación en curso (form)
-    userCity: null,               // Ciudad detectada (header)
-    userCoords: null,             // { latitude, longitude } del usuario (para distancias)
-    locationPermission: null,     // 'granted' | 'denied' | 'prompt'
+    currentLocation: null,
+    userCity: null,
+    userCoords: null,
+    locationPermission: null,
 
     /* ---------- Filtros ---------- */
     activeCategoryFilter: '',
@@ -28,13 +28,20 @@ window.AppState = {
     /* ---------- Form ---------- */
     isSubmitting: false,
 
-    /* Limpia estado dependiente de sesión */
+    /* ---------- Seller ---------- */
+    currentSellerApplication: null,
+
+    /* ---------- Just-in-time auth ---------- */
+    pendingAction: null,
+
     resetSession() {
         this.currentProfile = null;
+        this.currentPublicProfile = null;
         this.favoriteIds = new Set();
         this.currentLocation = null;
         this.currentProduct = null;
         this.isSubmitting = false;
-        // userCity y userCoords se conservan (no dependen de sesión)
+        this.currentSellerApplication = null;
+        this.pendingAction = null;
     }
 };

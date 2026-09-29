@@ -64,5 +64,64 @@ window.Validators = {
             return { valid: false, error: 'La hora de inicio debe ser anterior a la de fin.' };
         }
         return { valid: true };
+    },
+
+    /* =================================================
+       SOLICITUD DE VENDEDOR
+       ================================================= */
+    validateSellerApplication(data) {
+        if (!data.sellerType || !['person', 'business'].includes(data.sellerType)) {
+            return { valid: false, error: 'Selecciona el tipo de vendedor.' };
+        }
+        if (!data.displayName || data.displayName.trim().length < 2) {
+            return { valid: false, error: 'Ingresa un nombre público (mínimo 2 caracteres).' };
+        }
+        if (data.displayName.trim().length > 100) {
+            return { valid: false, error: 'El nombre público no puede superar 100 caracteres.' };
+        }
+        if (data.sellerType === 'business' && (!data.businessName || data.businessName.trim().length < 2)) {
+            return { valid: false, error: 'Ingresa el nombre del negocio.' };
+        }
+        if (!data.category || data.category.trim().length < 2) {
+            return { valid: false, error: 'Indica la categoría principal.' };
+        }
+        if (data.category.trim().length > 80) {
+            return { valid: false, error: 'La categoría no puede superar 80 caracteres.' };
+        }
+        if (!data.description || data.description.trim().length < 10) {
+            return { valid: false, error: 'Describe brevemente tu actividad (mínimo 10 caracteres).' };
+        }
+        if (data.description.trim().length > 1000) {
+            return { valid: false, error: 'La descripción no puede superar 1000 caracteres.' };
+        }
+        if (!data.phone || data.phone.trim().length < 7) {
+            return { valid: false, error: 'Ingresa un teléfono de contacto.' };
+        }
+        if (data.phone.trim().length > 30) {
+            return { valid: false, error: 'El teléfono no puede superar 30 caracteres.' };
+        }
+        if (!data.city || !data.city.trim()) {
+            return { valid: false, error: 'Ingresa tu ciudad.' };
+        }
+        if (!data.state || !data.state.trim()) {
+            return { valid: false, error: 'Ingresa tu estado.' };
+        }
+        if (!['phone', 'whatsapp'].includes(data.contactMethod || 'phone')) {
+            return { valid: false, error: 'Selecciona el método de contacto.' };
+        }
+        if (data.socialUrl && data.socialUrl.trim()) {
+            try {
+                const u = new URL(data.socialUrl.trim());
+                if (!['http:', 'https:'].includes(u.protocol)) {
+                    return { valid: false, error: 'La URL debe empezar con http:// o https://.' };
+                }
+            } catch (e) {
+                return { valid: false, error: 'La URL de la red social no es válida.' };
+            }
+        }
+        if (!data.termsAccepted) {
+            return { valid: false, error: 'Debes aceptar los términos para continuar.' };
+        }
+        return { valid: true };
     }
 };

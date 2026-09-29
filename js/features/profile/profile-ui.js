@@ -24,11 +24,97 @@
             <div class="login-required">
                 <i class="fa-solid fa-user-lock"></i>
                 <h3>No has iniciado sesión</h3>
-                <p>Inicia sesión para ver tu perfil y publicar.</p>
+                <p>Inicia sesión para ver tu perfil, guardar favoritos y publicar.</p>
                 <button class="btn-primary" id="btn-profile-login">Iniciar sesión</button>
             </div>`;
         const btn = document.getElementById('btn-profile-login');
         if (btn) btn.addEventListener('click', () => AuthUI.openAuthModal('login'));
+    }
+
+    /* -----------------------------------------------------
+       SELLER STATUS CARD
+       ----------------------------------------------------- */
+    function renderSellerStatusCard() {
+        const s = PermissionService.getSellerStatus();
+        const role = PermissionService.getRole();
+
+        if (s === 'pending') {
+            return `
+                <div class="seller-status-card state-pending" id="seller-status-card">
+                    <div class="seller-status-card-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+                    <div class="seller-status-card-text">
+                        <h4>Solicitud en revisión</h4>
+                        <p>Estamos revisando tu solicitud para vender.</p>
+                    </div>
+                    <button class="seller-action-btn" id="btn-seller-status-action">
+                        <i class="fa-solid fa-eye"></i> Ver
+                    </button>
+                </div>`;
+        }
+        if (s === 'rejected') {
+            return `
+                <div class="seller-status-card state-rejected" id="seller-status-card">
+                    <div class="seller-status-card-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                    <div class="seller-status-card-text">
+                        <h4>Solicitud no aprobada</h4>
+                        <p>Corrige tu información y vuelve a intentarlo.</p>
+                    </div>
+                    <button class="seller-action-btn" id="btn-seller-status-action">
+                        Corregir
+                    </button>
+                </div>`;
+        }
+        if (s === 'suspended') {
+            return `
+                <div class="seller-status-card state-suspended" id="seller-status-card">
+                    <div class="seller-status-card-icon"><i class="fa-solid fa-ban"></i></div>
+                    <div class="seller-status-card-text">
+                        <h4>Cuenta suspendida</h4>
+                        <p>Tu cuenta de vendedor está suspendida temporalmente.</p>
+                    </div>
+                    <button class="seller-action-btn" id="btn-seller-status-action">
+                        Ver
+                    </button>
+                </div>`;
+        }
+        if (s === 'approved' && role === 'seller') {
+            return `
+                <div class="seller-status-card state-approved" id="seller-status-card">
+                    <div class="seller-status-card-icon"><i class="fa-solid fa-circle-check"></i></div>
+                    <div class="seller-status-card-text">
+                        <h4>Vendedor aprobado</h4>
+                        <p>Ya puedes crear y administrar tus publicaciones.</p>
+                    </div>
+                    <button class="seller-action-btn" id="btn-seller-status-action">
+                        <i class="fa-solid fa-plus"></i> Publicar
+                    </button>
+                </div>`;
+        }
+        // none
+        return `
+            <div class="seller-status-card state-none" id="seller-status-card">
+                <div class="seller-status-card-icon"><i class="fa-solid fa-store"></i></div>
+                <div class="seller-status-card-text">
+                    <h4>¿Quieres vender en PipGo?</h4>
+                    <p>Convierte tu cuenta en vendedor y comienza a publicar.</p>
+                </div>
+                <button class="seller-action-btn" id="btn-seller-status-action">
+                    Quiero vender
+                </button>
+            </div>`;
+    }
+
+    function wireSellerCard() {
+        const btn = document.getElementById('btn-seller-status-action');
+        if (!btn) return;
+        const s = PermissionService.getSellerStatus();
+        btn.addEventListener('click', () => {
+            if (s === 'approved') {
+                NavigationUI.switchView('anunciarme');
+            } else {
+                SellerUI.open();
+            }
+        });
     }
 
     /* -----------------------------------------------------
@@ -41,9 +127,7 @@
             <header class="profile-header-pro">
                 <div class="profile-header-row">
                     <div class="profile-heading">
-                        <div class="title-row">
-                            <h2>Perfil</h2>
-                        </div>
+                        <div class="title-row"><h2>Perfil</h2></div>
                     </div>
                 </div>
             </header>
@@ -58,9 +142,7 @@
                     <header class="profile-header-pro">
                         <div class="profile-header-row">
                             <div class="profile-heading">
-                                <div class="title-row">
-                                    <h2>Perfil</h2>
-                                </div>
+                                <div class="title-row"><h2>Perfil</h2></div>
                             </div>
                         </div>
                     </header>
@@ -119,6 +201,8 @@
                     </div>
                 </header>
 
+                ${renderSellerStatusCard()}
+
                 <div class="profile-tabs" role="tablist">
                     <button class="profile-tab active" data-panel="own" role="tab">
                         <i class="fa-solid fa-box-open"></i> Mis publicaciones
@@ -145,6 +229,7 @@
             renderOwnPublications(ownPublications);
             renderFavoritePublications(favorites);
             renderSoldPublications(soldPublications);
+            wireSellerCard();
 
             document.getElementById('btn-change-avatar').addEventListener('click', () => avatarInput.click());
             document.getElementById('btn-open-settings').addEventListener('click', () => openSettings(profile));
@@ -166,9 +251,7 @@
                 <header class="profile-header-pro">
                     <div class="profile-header-row">
                         <div class="profile-heading">
-                            <div class="title-row">
-                                <h2>Perfil</h2>
-                            </div>
+                            <div class="title-row"><h2>Perfil</h2></div>
                         </div>
                     </div>
                 </header>
@@ -185,6 +268,8 @@
        ----------------------------------------------------- */
     function buildCard(pub, options = {}) {
         const { withActions = false } = options;
+        const canManage = withActions && PermissionService.canEditPublication(pub);
+
         const card = document.createElement('article');
         card.className = 'product-card';
         card.dataset.id = pub.id;
@@ -228,10 +313,9 @@
         info.appendChild(DOM.el('h4', {}, [pub.name || '']));
         info.appendChild(DOM.el('span', { class: 'product-price' }, [Formatters.formatPrice(pub.price)]));
 
-        if (withActions) {
+        if (canManage) {
             const actions = DOM.el('div', { class: 'card-actions' });
 
-            // Editar: icono + label (el label se oculta en móvil vía CSS)
             const editBtn = DOM.el('button', {
                 class: 'card-action-btn btn-edit',
                 'data-edit-id': pub.id,
@@ -242,7 +326,6 @@
             ]);
             actions.appendChild(editBtn);
 
-            // Vendido: icono + label (solo si está activa)
             if (pub.status === 'active') {
                 const soldBtn = DOM.el('button', {
                     class: 'card-action-btn btn-sold',
@@ -255,7 +338,6 @@
                 actions.appendChild(soldBtn);
             }
 
-            // Eliminar: solo icono siempre (con aria-label)
             const delBtn = DOM.el('button', {
                 class: 'card-action-btn btn-delete',
                 'data-delete-id': pub.id,
@@ -301,13 +383,18 @@
             const empty = emptyState({
                 icon: 'fa-box-open',
                 title: 'Aún no tienes publicaciones',
-                text: 'Publica tu primer producto para empezar a vender.',
-                actionLabel: 'Crear publicación',
+                text: PermissionService.canPublish()
+                    ? 'Publica tu primer producto para empezar a vender.'
+                    : 'Cuando seas vendedor aprobado podrás publicar productos.',
+                actionLabel: PermissionService.canPublish() ? 'Crear publicación' : 'Quiero vender',
                 actionId: 'empty-create-pub'
             });
             container.appendChild(empty);
             const btn = document.getElementById('empty-create-pub');
-            if (btn) btn.addEventListener('click', () => NavigationUI.switchView('anunciarme'));
+            if (btn) btn.addEventListener('click', () => {
+                if (PermissionService.canPublish()) NavigationUI.switchView('anunciarme');
+                else SellerUI.open();
+            });
             return;
         }
         list.forEach(pub => container.appendChild(buildCard(pub, { withActions: true })));
@@ -359,21 +446,21 @@
         if (editBtn) {
             e.stopPropagation();
             const pub = ownPublications.find(p => p.id === editBtn.dataset.editId);
-            if (pub) PublicationUI.openEditForm(pub);
+            if (pub && PermissionService.canEditPublication(pub)) PublicationUI.openEditForm(pub);
             return;
         }
         const soldBtn = e.target.closest('.btn-sold');
         if (soldBtn) {
             e.stopPropagation();
             const pub = ownPublications.find(p => p.id === soldBtn.dataset.soldId);
-            if (pub) markAsSold(pub);
+            if (pub && PermissionService.canMarkAsSold(pub)) markAsSold(pub);
             return;
         }
         const delBtn = e.target.closest('.btn-delete');
         if (delBtn) {
             e.stopPropagation();
             const pub = ownPublications.find(p => p.id === delBtn.dataset.deleteId);
-            if (pub) PublicationUI.deletePublication(pub);
+            if (pub && PermissionService.canDeletePublication(pub)) PublicationUI.deletePublication(pub);
         }
     }
 
@@ -390,7 +477,7 @@
             renderProfile();
         } catch (error) {
             Logger.error('Error marcando como vendido', error);
-            Toast.error('No pudimos actualizar la publicación.');
+            Toast.error(ErrorHandler.toUserMessage(error, { context: 'profile.markSold' }));
         }
     }
 
@@ -417,7 +504,7 @@
     }
 
     /* -----------------------------------------------------
-       AJUSTES — modal agrupado
+       AJUSTES
        ----------------------------------------------------- */
     function openSettings(profile) {
         const email = profile.email || (AppState.currentUser && AppState.currentUser.email) || '—';
@@ -451,7 +538,7 @@
                         <div class="s-icon tone-green"><i class="fa-solid fa-shield-halved"></i></div>
                         <div class="s-text">
                             <span class="s-label">Cuenta</span>
-                            <span class="s-value">Activa</span>
+                            <span class="s-value">${PermissionService.getSellerStatus() === 'approved' ? 'Vendedor aprobado' : 'Activa'}</span>
                         </div>
                     </div>
                 </div>
@@ -483,10 +570,7 @@
         settingsModal.classList.remove('hidden');
     }
 
-    function closeSettings() {
-        settingsModal.classList.add('hidden');
-    }
-
+    function closeSettings() { settingsModal.classList.add('hidden'); }
     function isSettingsModalOpen() {
         return settingsModal && !settingsModal.classList.contains('hidden');
     }

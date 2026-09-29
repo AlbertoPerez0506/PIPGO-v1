@@ -73,16 +73,76 @@
     }
 
     /* =====================================================
-       AUTH
+       AUTH / PERMISOS
        ===================================================== */
     function updateAuthUI() {
-        if (AppState.currentUser) {
+        const canPublish = window.PermissionService && PermissionService.canPublish();
+        if (canPublish) {
             loginRequired.classList.add('hidden');
             formWrapper.classList.remove('hidden');
         } else {
             loginRequired.classList.remove('hidden');
             formWrapper.classList.add('hidden');
+            renderLoginRequiredState();
         }
+    }
+
+    function renderLoginRequiredState() {
+        const container = document.getElementById('login-required');
+        if (!container) return;
+
+        /* Sin sesión */
+        if (!window.PermissionService || !PermissionService.isAuthenticated()) {
+            container.innerHTML = `
+                <i class="fa-solid fa-user-lock"></i>
+                <h3>Necesitas iniciar sesión</h3>
+                <p>Para publicar un anuncio debes estar autenticado.</p>
+                <button class="btn-primary" id="btn-go-auth">Iniciar sesión</button>`;
+            const btn = document.getElementById('btn-go-auth');
+            if (btn) btn.addEventListener('click', () => AuthUI.openAuthModal('login'));
+            return;
+        }
+
+        const status = PermissionService.getSellerStatus();
+
+        if (status === 'pending') {
+            container.innerHTML = `
+                <i class="fa-solid fa-hourglass-half" style="color:var(--primary);"></i>
+                <h3>Solicitud en revisión</h3>
+                <p>Tu solicitud para vender en PipGo está siendo revisada.</p>
+                <button class="btn-primary" id="btn-seller-view">Ver solicitud</button>`;
+            const b = document.getElementById('btn-seller-view');
+            if (b) b.addEventListener('click', () => SellerUI.open());
+            return;
+        }
+
+        if (status === 'rejected') {
+            container.innerHTML = `
+                <i class="fa-solid fa-circle-exclamation" style="color:var(--danger-fg);"></i>
+                <h3>Solicitud no aprobada</h3>
+                <p>Corrige tu información y vuelve a enviarla para poder publicar.</p>
+                <button class="btn-primary" id="btn-seller-fix">Corregir solicitud</button>`;
+            const b = document.getElementById('btn-seller-fix');
+            if (b) b.addEventListener('click', () => SellerUI.open());
+            return;
+        }
+
+        if (status === 'suspended') {
+            container.innerHTML = `
+                <i class="fa-solid fa-ban" style="color:var(--text-tertiary);"></i>
+                <h3>Cuenta suspendida</h3>
+                <p>Tu cuenta de vendedor está suspendida temporalmente.</p>`;
+            return;
+        }
+
+        /* role=user, sellerStatus=none */
+        container.innerHTML = `
+            <i class="fa-solid fa-store"></i>
+            <h3>Conviértete en vendedor</h3>
+            <p>Solicita ser vendedor para publicar tus productos en PipGo.</p>
+            <button class="btn-primary" id="btn-seller-request">Quiero vender</button>`;
+        const b = document.getElementById('btn-seller-request');
+        if (b) b.addEventListener('click', () => SellerUI.open());
     }
 
     /* =====================================================
@@ -557,13 +617,19 @@
     }
 
     /* =====================================================
-       SUBMIT — flujo robusto de ubicación
+       SUBMIT — flujo robusto con permisos
        ===================================================== */
     async function handleSubmit(e) {
         e.preventDefault();
         hideFormError();
 
         if (AppState.isSubmitting) return;
+
+        /* Doble validación de permisos (UI + reglas Firestore) */
+        if (window.PermissionService && !PermissionService.canPublish()) {
+            showFormError(PermissionService.reasonCannotPublish());
+            return;
+        }
 
         if (!AppState.currentUser || !auth.currentUser) {
             showFormError('Debes iniciar sesión para publicar.');
@@ -689,6 +755,10 @@
        ELIMINAR / EDITAR
        ===================================================== */
     async function deletePublication(pub) {
+        if (window.PermissionService && !PermissionService.canDeletePublication(pub)) {
+            Toast.error('No puedes eliminar esta publicación.');
+            return;
+        }
         const confirmed = window.confirm('¿Eliminar esta publicación?\n\nEsta acción no se puede deshacer.');
         if (!confirmed) return;
         try {
@@ -698,11 +768,15 @@
             if (AppState.currentView === 'perfil') ProfileUI.renderProfile();
         } catch (error) {
             Logger.error('Error eliminando publicación', error);
-            Toast.error('No pudimos eliminar la publicación.');
+            Toast.error(ErrorHandler.toUserMessage(error, { context: 'publication.delete' }));
         }
     }
 
     function openEditForm(pub) {
+        if (window.PermissionService && !PermissionService.canEditPublication(pub)) {
+            Toast.error('No puedes editar esta publicación.');
+            return;
+        }
         hideFormError();
         setSubmitButton('Guardar cambios', 'fa-floppy-disk');
         NavigationUI.switchView('anunciarme');
@@ -1245,6 +1319,15 @@
         sheetMapLink.addEventListener('click', () => openDirections(AppState.currentProduct));
 
         btnChatV2.addEventListener('click', () => {
+            if (window.PermissionService && !PermissionService.canMessage()) {
+                AppState.pendingAction = {
+                    type: 'openChat',
+                    productId: AppState.currentProduct && AppState.currentProduct.id
+                };
+                AuthUI.openAuthModal('login');
+                Toast.info('Inicia sesión para contactar al vendedor.');
+                return;
+            }
             Toast.info('Los mensajes directos llegarán en la V2.');
         });
 

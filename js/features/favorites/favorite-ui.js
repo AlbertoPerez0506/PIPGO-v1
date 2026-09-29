@@ -1,6 +1,7 @@
 /* =====================================================
    PIPGO · FAVORITE UI
-   Interacción con botones de favorito.
+   Just-in-time auth: si es visitante, guarda la acción
+   pendiente y la ejecuta tras el login.
    ===================================================== */
 
 (function () {
@@ -28,7 +29,8 @@
         if (!btn) return;
         e.stopPropagation();
         e.preventDefault();
-        const pubId = btn.dataset.favId || (btn.closest('.product-card') && btn.closest('.product-card').dataset.id);
+        const pubId = btn.dataset.favId ||
+            (btn.closest('.product-card') && btn.closest('.product-card').dataset.id);
         if (pubId) toggleFavorite(pubId);
     }
 
@@ -38,14 +40,17 @@
     }
 
     async function toggleFavorite(publicationId) {
+        // Visitante → guardamos la intención y abrimos login
         if (!AppState.currentUser) {
+            AppState.pendingAction = { type: 'toggleFavorite', publicationId };
             AuthUI.openAuthModal('login');
+            Toast.info('Inicia sesión para guardar publicaciones.');
             return;
         }
         try {
             const isFavorite = await FavoriteService.toggleFavorite(AppState.currentUser.uid, publicationId);
             if (isFavorite) AppState.favoriteIds.add(publicationId);
-            else AppState.favoriteIds.delete(publicationId);
+            else            AppState.favoriteIds.delete(publicationId);
 
             updateAllButtons();
             Toast.success(isFavorite ? 'Guardado en favoritos.' : 'Eliminado de favoritos.');
@@ -58,7 +63,8 @@
 
     function updateAllButtons() {
         document.querySelectorAll('.product-favorite').forEach(btn => {
-            const pubId = btn.dataset.favId || (btn.closest('.product-card') && btn.closest('.product-card').dataset.id);
+            const pubId = btn.dataset.favId ||
+                (btn.closest('.product-card') && btn.closest('.product-card').dataset.id);
             if (!pubId) return;
             const icon = btn.querySelector('i');
             if (!icon) return;
@@ -70,6 +76,7 @@
         const sheetBtn = document.getElementById('btn-favorite');
         if (sheetBtn && AppState.currentProduct) {
             const icon = sheetBtn.querySelector('i');
+            if (!icon) return;
             const isFav = AppState.favoriteIds.has(AppState.currentProduct.id);
             icon.className = isFav ? 'fa-solid fa-bookmark' : 'fa-regular fa-bookmark';
             icon.style.color = isFav ? 'var(--primary)' : '';

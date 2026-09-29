@@ -501,6 +501,17 @@
             </div>
         </div>
 
+        <!-- ============ MODAL SELLER (quiero vender) ============ -->
+        <div id="seller-modal" class="modal-backdrop hidden">
+            <div class="auth-modal seller-modal-pro">
+                <div class="auth-header">
+                    <h3 id="seller-modal-title">Quiero vender</h3>
+                    <button class="modal-close" id="seller-close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="seller-modal-body"></div>
+            </div>
+        </div>
+
         <!-- ============ NAVBAR ============ -->
         <nav class="bottom-nav" aria-label="Navegación principal">
             <button class="nav-item active" data-view="home" aria-label="Inicio">
@@ -542,10 +553,12 @@
 <script src="js/utils/formatters.js"></script>
 <script src="js/utils/dom.js"></script>
 
+<script src="js/services/permission-service.js"></script>
 <script src="js/services/auth-service.js"></script>
 <script src="js/services/user-service.js"></script>
 <script src="js/services/publication-service.js"></script>
 <script src="js/services/favorite-service.js"></script>
+<script src="js/services/seller-service.js"></script>
 <script src="js/services/image-service.js"></script>
 <script src="js/services/location-service.js"></script>
 
@@ -556,6 +569,7 @@
 <script src="js/features/profile/profile-ui.js"></script>
 <script src="js/features/publications/publication-ui.js"></script>
 <script src="js/features/favorites/favorite-ui.js"></script>
+<script src="js/features/seller/seller-ui.js"></script>
 
 <script src="js/app.js"></script>
 </body>

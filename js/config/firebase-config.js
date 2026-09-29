@@ -1,16 +1,15 @@
 /* =====================================================
    PIPGO · FIREBASE CONFIG
-   Inicialización de Firebase + referencias globales.
-   Proyecto: PIPGO-v1
+   Proyecto: PIPGO-v2
    ===================================================== */
 
 const firebaseConfig = {
-    apiKey: "AIzaSyDTOGvZHb8n4Kj0orzvkjw7U08IlRTpbdI",
-    authDomain: "pipgo-v1.firebaseapp.com",
-    projectId: "pipgo-v1",
-    storageBucket: "pipgo-v1.firebasestorage.app",
-    messagingSenderId: "194728065858",
-    appId: "1:194728065858:web:291d83884c6636621666db"
+    apiKey: "AIzaSyD-jaLMFPRLpuNkB-GSex7fiPSi6RqCJLY",
+    authDomain: "pipgo-v2.firebaseapp.com",
+    projectId: "pipgo-v2",
+    storageBucket: "pipgo-v2.firebasestorage.app",
+    messagingSenderId: "432829501406",
+    appId: "1:432829501406:web:cad5cd72fdc03f48c8d74f"
 };
 
 firebase.initializeApp(firebaseConfig);

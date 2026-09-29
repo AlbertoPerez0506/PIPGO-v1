@@ -1,7 +1,5 @@
 /* =====================================================
    PIPGO · AUTH SERVICE
-   Autenticación: registro, login, logout, observer.
-   Traduce errores Firebase a mensajes de usuario.
    ===================================================== */
 
 window.AuthService = {
@@ -31,7 +29,6 @@ window.AuthService = {
             });
             return credential.user;
         } catch (error) {
-            // Rollback: no dejar cuenta Auth huérfana
             try {
                 await credential.user.delete();
                 await auth.signOut();
@@ -50,15 +47,10 @@ window.AuthService = {
         }
     },
 
-    logout() {
-        return auth.signOut();
-    },
+    logout() { return auth.signOut(); },
 
-    onAuthStateChanged(callback) {
-        return auth.onAuthStateChanged(callback);
-    },
+    onAuthStateChanged(callback) { return auth.onAuthStateChanged(callback); },
 
-    /* Traduce errores de Firebase Auth a mensajes humanos */
     getAuthErrorMessage(error) {
         const code = error && error.code;
         const map = {
@@ -67,6 +59,7 @@ window.AuthService = {
             'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
             'auth/user-not-found': 'No existe una cuenta con este correo.',
             'auth/wrong-password': 'Contraseña incorrecta.',
+            'auth/invalid-credential': 'Correo o contraseña incorrectos.',
             'auth/too-many-requests': 'Demasiados intentos. Espera un momento.',
             'auth/network-request-failed': 'No pudimos conectar. Revisa tu conexión a Internet.',
             'auth/operation-not-allowed': 'El registro con correo no está habilitado.'
