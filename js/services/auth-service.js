@@ -51,6 +51,51 @@ window.AuthService = {
 
     onAuthStateChanged(callback) { return auth.onAuthStateChanged(callback); },
 
+    /* -------------------------------------------------
+       RECUPERACIÓN DE CONTRASEÑA
+       ------------------------------------------------- */
+
+    /**
+     * El usuario pide recuperar contraseña. Se crea una
+     * solicitud en Firestore que el admin debe aprobar.
+     * No requiere estar autenticado.
+     */
+    async requestPasswordReset(rawEmail) {
+        const email = String(rawEmail || '').trim().toLowerCase();
+        if (!Validators.validateEmail(email)) {
+            throw new Error('Correo electrónico inválido.');
+        }
+
+        try {
+            await db.collection('solicitudesRecuperacion').add({
+                email,
+                status: 'pending',
+                requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                reviewedAt: null,
+                reviewedBy: null,
+                emailSentAt: null,
+                rejectionReason: null
+            });
+        } catch (error) {
+            Logger.error('Error creando solicitud de recuperación', error);
+            throw new Error('No pudimos registrar tu solicitud. Inténtalo de nuevo.');
+        }
+    },
+
+    /**
+     * Envía el correo estándar de Firebase para resetear
+     * contraseña. Lo invoca el admin al aprobar una solicitud.
+     */
+    async sendPasswordResetEmail(email) {
+        try {
+            await auth.sendPasswordResetEmail(email);
+            return true;
+        } catch (error) {
+            Logger.error('sendPasswordResetEmail falló', error);
+            throw new Error(this.getAuthErrorMessage(error));
+        }
+    },
+
     getAuthErrorMessage(error) {
         const code = error && error.code;
         const map = {

@@ -1,9 +1,7 @@
 /* =====================================================
    PIPGO · ADMIN UI
-   Renderiza el panel, tarjetas, modales y confirmaciones.
-   No contiene lógica Firestore: eso vive en AdminService.
-   Regla visual PipGo: nada de emojis ni símbolos Unicode
-   decorativos. Todo estado usa Font Awesome.
+   Panel de administración: dashboard, solicitudes,
+   recuperaciones de contraseña y usuarios.
    ===================================================== */
 
 (function () {
@@ -12,8 +10,10 @@
     let initialized = false;
     let currentTab = 'dashboard';
     let currentFilter = 'pending';
+    let currentRecoverFilter = 'pending';
     let applicationsCache = [];
     let usersCache = [];
+    let recoveriesCache = [];
 
     let confirmModal, confirmTitle, confirmText,
         confirmInputWrap, confirmInputLabel, confirmInput,
@@ -40,7 +40,6 @@
 
     function statusClass(s) { return 'status-' + (s || 'none'); }
 
-    /* Icono Font Awesome por estado. Reemplaza al antiguo statusEmoji. */
     function statusIcon(s) {
         switch (s) {
             case 'pending':    return 'fa-hourglass-half';
@@ -52,7 +51,6 @@
         }
     }
 
-    /* Icono + texto de rol, sin emojis. Devuelve HTML seguro. */
     function roleLabelHtml(role, sellerStatus) {
         const build = (icon, label) =>
             `<i class="fa-solid ${icon}" aria-hidden="true"></i> ${Formatters.escapeHtml(label)}`;
@@ -71,6 +69,15 @@
         if (!ts) return '—';
         const d = ts.toDate ? ts.toDate() : new Date(ts);
         return d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function formatDateTime(ts) {
+        if (!ts) return '—';
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return d.toLocaleString('es-MX', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
     }
 
     function describeAdminError(e) {
@@ -113,6 +120,10 @@
                         <span class="admin-stat-number">${stats.rejected}</span>
                         <span class="admin-stat-label">Rechazadas</span>
                     </div>
+                    <div class="admin-stat-card warn">
+                        <span class="admin-stat-number">${stats.pendingRecoveries}</span>
+                        <span class="admin-stat-label">Recuperaciones</span>
+                    </div>
                 </div>`;
         } catch (e) {
             Logger.error('Admin dashboard error', e);
@@ -121,7 +132,7 @@
     }
 
     /* =====================================================
-       SOLICITUDES
+       SOLICITUDES DE VENDEDOR
        ===================================================== */
     async function renderApplications() {
         const panel = document.getElementById('admin-panel-applications');
@@ -276,6 +287,171 @@
     }
 
     /* =====================================================
+       RECUPERACIONES DE CONTRASEÑA
+       ===================================================== */
+    async function renderRecoveries() {
+        const panel = document.getElementById('admin-panel-recoveries');
+        if (!panel) return;
+
+        panel.innerHTML = `
+            <div class="admin-filter-row">
+                <button class="admin-filter-chip${currentRecoverFilter === 'pending'  ? ' active' : ''}" data-filter="pending">Pendientes</button>
+                <button class="admin-filter-chip${currentRecoverFilter === 'approved' ? ' active' : ''}" data-filter="approved">Aprobadas</button>
+                <button class="admin-filter-chip${currentRecoverFilter === 'rejected' ? ' active' : ''}" data-filter="rejected">Rechazadas</button>
+                <button class="admin-filter-chip${currentRecoverFilter === 'all'      ? ' active' : ''}" data-filter="all">Todas</button>
+            </div>
+            <div id="admin-recoveries-list" class="admin-applications-list">
+                <p class="admin-loading">Cargando solicitudes…</p>
+            </div>`;
+
+        panel.querySelectorAll('.admin-filter-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                currentRecoverFilter = chip.dataset.filter;
+                renderRecoveries();
+            });
+        });
+
+        await loadRecoveries();
+    }
+
+    async function loadRecoveries() {
+        const list = document.getElementById('admin-recoveries-list');
+        if (!list) return;
+        list.innerHTML = '<p class="admin-loading">Cargando solicitudes…</p>';
+
+        try {
+            recoveriesCache = await AdminService.listPasswordResetRequests(currentRecoverFilter);
+
+            if (!recoveriesCache.length) {
+                list.innerHTML = '<p class="admin-empty">No hay solicitudes de recuperación en este estado.</p>';
+                return;
+            }
+
+            list.innerHTML = '';
+            recoveriesCache.forEach(r => list.appendChild(buildRecoveryCard(r)));
+        } catch (e) {
+            Logger.error('Admin load recoveries error', e);
+            list.innerHTML = `<p class="admin-error">${Formatters.escapeHtml(describeAdminError(e))}</p>`;
+        }
+    }
+
+    function buildRecoveryCard(req) {
+        const card = el(`
+            <div class="admin-app-card">
+                <div class="admin-app-head" role="button" tabindex="0">
+                    <div class="admin-app-head-info">
+                        <h4><i class="fa-solid fa-key" aria-hidden="true"></i> ${Formatters.escapeHtml(req.email || '—')}</h4>
+                        <p class="admin-app-email">Solicitada ${formatDateTime(req.requestedAt)}</p>
+                    </div>
+                    <div class="admin-app-head-right">
+                        <span class="admin-status-pill ${statusClass(req.status)}">
+                            <i class="fa-solid ${statusIcon(req.status)}" aria-hidden="true"></i>
+                            ${Formatters.escapeHtml(statusLabel(req.status))}
+                        </span>
+                        <i class="fa-solid fa-chevron-down admin-chevron"></i>
+                    </div>
+                </div>
+                <div class="admin-app-body hidden">
+                    ${renderRecoveryBody(req)}
+                </div>
+            </div>`);
+
+        const head = card.querySelector('.admin-app-head');
+        const body = card.querySelector('.admin-app-body');
+        head.addEventListener('click', () => {
+            const isOpen = !body.classList.contains('hidden');
+            body.classList.toggle('hidden', isOpen);
+            card.classList.toggle('open', !isOpen);
+        });
+
+        card.querySelectorAll('[data-recover-action]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleRecoveryAction(btn.dataset.recoverAction, req);
+            });
+        });
+
+        return card;
+    }
+
+    function renderRecoveryBody(req) {
+        let html = '<div class="admin-app-fields">';
+        html += `
+            <div class="admin-field">
+                <span class="admin-field-label">Correo electrónico</span>
+                <span class="admin-field-value">${Formatters.escapeHtml(req.email || '—')}</span>
+            </div>
+            <div class="admin-field">
+                <span class="admin-field-label">Solicitada</span>
+                <span class="admin-field-value">${formatDateTime(req.requestedAt)}</span>
+            </div>`;
+        if (req.reviewedAt) {
+            html += `
+                <div class="admin-field">
+                    <span class="admin-field-label">Revisada</span>
+                    <span class="admin-field-value">${formatDateTime(req.reviewedAt)}</span>
+                </div>`;
+        }
+        if (req.emailSentAt) {
+            html += `
+                <div class="admin-field">
+                    <span class="admin-field-label">Correo enviado</span>
+                    <span class="admin-field-value">${formatDateTime(req.emailSentAt)}</span>
+                </div>`;
+        }
+        html += '</div>';
+
+        if (req.rejectionReason) {
+            html += `
+                <div class="admin-note danger">
+                    <strong>Motivo del rechazo:</strong>
+                    <p>${Formatters.escapeHtml(req.rejectionReason)}</p>
+                </div>`;
+        }
+
+        const actions = [];
+        if (req.status === 'pending') {
+            actions.push(`<button class="admin-action-btn approve" data-recover-action="approve">
+                <i class="fa-solid fa-paper-plane"></i> Enviar enlace
+            </button>`);
+            actions.push(`<button class="admin-action-btn reject" data-recover-action="reject">
+                <i class="fa-solid fa-xmark"></i> Rechazar
+            </button>`);
+        } else if (req.status === 'rejected') {
+            actions.push(`<button class="admin-action-btn approve" data-recover-action="approve">
+                <i class="fa-solid fa-paper-plane"></i> Enviar enlace
+            </button>`);
+        }
+
+        if (actions.length) {
+            html += `<div class="admin-app-actions">${actions.join('')}</div>`;
+        }
+
+        return html;
+    }
+
+    function handleRecoveryAction(action, req) {
+        if (action === 'approve') {
+            openConfirm({
+                title: 'Enviar enlace de recuperación',
+                text: `Se enviará un correo a ${req.email} con un enlace para definir una nueva contraseña. ¿Continuar?`,
+                inputLabel: null,
+                okText: 'Sí, enviar',
+                onConfirm: () => AdminService.approvePasswordReset(req.id, req.email)
+            });
+        } else if (action === 'reject') {
+            openConfirm({
+                title: 'Rechazar solicitud',
+                text: `¿Rechazar la solicitud de ${req.email}? Puedes agregar un motivo.`,
+                inputLabel: 'Motivo (opcional)',
+                inputPlaceholder: 'Ej. Correo no coincide con ninguna cuenta…',
+                okText: 'Sí, rechazar',
+                onConfirm: (value) => AdminService.rejectPasswordReset(req.id, value || '')
+            });
+        }
+    }
+
+    /* =====================================================
        USUARIOS
        ===================================================== */
     async function renderUsers() {
@@ -416,7 +592,11 @@
         const needsInput = !confirmInputWrap.classList.contains('hidden');
         const value = needsInput ? confirmInput.value.trim() : '';
 
-        if (needsInput && value.length < 3) {
+        // Para rechazos con motivo, permitir vacío (opcional). El mínimo
+        // solo aplica si el label dice "Motivo del rechazo" en vendedores.
+        if (needsInput &&
+            confirmInputLabel.textContent === 'Motivo del rechazo' &&
+            value.length < 3) {
             confirmError.textContent = 'Escribe al menos 3 caracteres.';
             confirmError.classList.remove('hidden');
             return;
@@ -432,8 +612,9 @@
             Toast.success('Acción completada correctamente.');
 
             if (currentTab === 'applications') await loadApplications();
-            else if (currentTab === 'dashboard') await renderDashboard();
-            else if (currentTab === 'users')     await renderUsers();
+            else if (currentTab === 'recoveries') await loadRecoveries();
+            else if (currentTab === 'dashboard')  await renderDashboard();
+            else if (currentTab === 'users')      await renderUsers();
         } catch (e) {
             Logger.error('Admin action failed', e);
             confirmError.textContent = describeAdminError(e);
@@ -458,20 +639,19 @@
 
         if (tab === 'dashboard')         renderDashboard();
         else if (tab === 'applications') renderApplications();
+        else if (tab === 'recoveries')   renderRecoveries();
         else if (tab === 'users')        renderUsers();
     }
 
     /* =====================================================
        ENTRAR AL PANEL
-       FIX: reemplaza setTimeout(120) por polling con
-       reintentos, resistente a latencias de red.
        ===================================================== */
     function onEnterAdmin() {
         waitForAuthThenEnter(0);
     }
 
     function waitForAuthThenEnter(attempt) {
-        const MAX_ATTEMPTS = 12;   // ~1.2s máximo
+        const MAX_ATTEMPTS = 12;
         const INTERVAL_MS = 100;
 
         if (AppState.currentUser) {

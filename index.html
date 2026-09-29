@@ -485,14 +485,16 @@
                 </header>
 
                 <div class="admin-tabs" role="tablist">
-                    <button class="admin-tab active" data-admin-tab="dashboard">Dashboard</button>
-                    <button class="admin-tab" data-admin-tab="applications">Solicitudes</button>
-                    <button class="admin-tab" data-admin-tab="users">Usuarios</button>
+                    <button class="admin-tab active" data-admin-tab="dashboard" type="button">Dashboard</button>
+                    <button class="admin-tab" data-admin-tab="applications" type="button">Solicitudes</button>
+                    <button class="admin-tab" data-admin-tab="recoveries" type="button">Recuperaciones</button>
+                    <button class="admin-tab" data-admin-tab="users" type="button">Usuarios</button>
                 </div>
 
                 <div class="admin-panels">
                     <div class="admin-panel active" id="admin-panel-dashboard"></div>
                     <div class="admin-panel" id="admin-panel-applications"></div>
+                    <div class="admin-panel" id="admin-panel-recoveries"></div>
                     <div class="admin-panel" id="admin-panel-users"></div>
                 </div>
             </section>
@@ -584,44 +586,125 @@
 
         <!-- ============ MODAL AUTH ============ -->
         <div id="auth-modal" class="modal-backdrop hidden">
-            <div class="auth-modal">
-                <div class="auth-header">
-                    <h3>Bienvenido a PipGo</h3>
-                    <button class="modal-close" id="auth-close"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-                <div class="auth-tabs">
-                    <button class="auth-tab active" data-auth="login">Iniciar sesión</button>
-                    <button class="auth-tab" data-auth="register">Crear cuenta</button>
+            <div class="auth-modal-pro">
+
+                <div class="auth-hero">
+                    <button class="auth-close" id="auth-close" aria-label="Cerrar">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <div class="auth-hero-icon" id="auth-hero-icon">
+                        <i class="fa-solid fa-store"></i>
+                    </div>
+                    <h3 class="auth-hero-title" id="auth-hero-title">Bienvenido a PipGo</h3>
+                    <p class="auth-hero-subtitle" id="auth-hero-subtitle">Compra y vende cerca de ti</p>
                 </div>
 
-                <form id="login-form" class="auth-form">
-                    <div class="input-group">
+                <div class="auth-tabs-pro" id="auth-tabs-pro">
+                    <button class="auth-tab-pro active" data-auth="login" type="button">
+                        <i class="fa-solid fa-right-to-bracket"></i> Iniciar sesión
+                    </button>
+                    <button class="auth-tab-pro" data-auth="register" type="button">
+                        <i class="fa-solid fa-user-plus"></i> Crear cuenta
+                    </button>
+                </div>
+
+                <form id="login-form" class="auth-form-pro" autocomplete="on">
+                    <div class="auth-field">
                         <label for="login-email">Correo electrónico</label>
-                        <input type="email" id="login-email" required>
+                        <div class="auth-input-wrap">
+                            <i class="fa-solid fa-envelope auth-input-icon"></i>
+                            <input type="email" id="login-email" autocomplete="email"
+                                placeholder="Correo" required>
+                        </div>
                     </div>
-                    <div class="input-group">
+
+                    <div class="auth-field">
                         <label for="login-password">Contraseña</label>
-                        <input type="password" id="login-password" required>
+                        <div class="auth-input-wrap">
+                            <i class="fa-solid fa-lock auth-input-icon"></i>
+                            <input type="password" id="login-password" autocomplete="current-password"
+                                placeholder="••••••••" required>
+                            <button type="button" class="auth-input-toggle" data-toggle="login-password" aria-label="Mostrar contraseña">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
-                    <button type="submit" class="btn-primary btn-large">Entrar</button>
+
+                    <button type="button" class="auth-link-btn" id="btn-forgot-password">
+                        <i class="fa-solid fa-key"></i> ¿Olvidaste tu contraseña?
+                    </button>
+
+                    <button type="submit" class="btn-primary btn-large auth-submit">
+                        <i class="fa-solid fa-right-to-bracket"></i> Entrar
+                    </button>
                 </form>
 
-                <form id="register-form" class="auth-form hidden">
-                    <div class="input-group">
-                        <label for="register-username">Username</label>
-                        <input type="text" id="register-username" required minlength="3" maxlength="20" autocomplete="off" placeholder="Ej. alberto_0506">
+                <form id="register-form" class="auth-form-pro hidden" autocomplete="on">
+                    <div class="auth-field">
+                        <label for="register-username">Nombre de usuario</label>
+                        <div class="auth-input-wrap">
+                            <i class="fa-solid fa-at auth-input-icon"></i>
+                            <input type="text" id="register-username" autocomplete="username"
+                                placeholder="Username" minlength="3" maxlength="20" required>
+                        </div>
+                        <p class="auth-field-hint">Solo letras, números, "_" y "."</p>
                     </div>
-                    <div class="input-group">
+
+                    <div class="auth-field">
                         <label for="register-email">Correo electrónico</label>
-                        <input type="email" id="register-email" required>
+                        <div class="auth-input-wrap">
+                            <i class="fa-solid fa-envelope auth-input-icon"></i>
+                            <input type="email" id="register-email" autocomplete="email"
+                                placeholder="Correo" required>
+                        </div>
                     </div>
-                    <div class="input-group">
+
+                    <div class="auth-field">
                         <label for="register-password">Contraseña</label>
-                        <input type="password" id="register-password" required minlength="6">
+                        <div class="auth-input-wrap">
+                            <i class="fa-solid fa-lock auth-input-icon"></i>
+                            <input type="password" id="register-password" autocomplete="new-password"
+                                placeholder="Mínimo 6 caracteres" minlength="6" required>
+                            <button type="button" class="auth-input-toggle" data-toggle="register-password" aria-label="Mostrar contraseña">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
-                    <button type="submit" class="btn-primary btn-large">Crear cuenta</button>
+
+                    <button type="submit" class="btn-primary btn-large auth-submit">
+                        <i class="fa-solid fa-user-plus"></i> Crear cuenta
+                    </button>
                 </form>
+
+                <div id="recover-view" class="auth-form-pro hidden">
+                    <div class="auth-recover-hero">
+                        <div class="auth-recover-icon">
+                            <i class="fa-solid fa-key"></i>
+                        </div>
+                        <h4>Recuperar contraseña</h4>
+                        <p>Escribe el correo con el que te registraste. Un administrador revisará tu solicitud; si es aprobada, recibirás un enlace en tu correo para definir una nueva contraseña.</p>
+                    </div>
+
+                    <div class="auth-field">
+                        <label for="recover-email">Correo electrónico</label>
+                        <div class="auth-input-wrap">
+                            <i class="fa-solid fa-envelope auth-input-icon"></i>
+                            <input type="email" id="recover-email" autocomplete="email"
+                                placeholder="tucorreo@ejemplo.com" required>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-primary btn-large auth-submit" id="btn-submit-recover">
+                        <i class="fa-solid fa-paper-plane"></i> Enviar solicitud
+                    </button>
+
+                    <button type="button" class="auth-link-btn" id="btn-back-to-login">
+                        <i class="fa-solid fa-arrow-left"></i> Volver a iniciar sesión
+                    </button>
+                </div>
+
                 <div id="auth-error" class="form-error hidden"></div>
+                <div id="auth-success" class="form-success hidden"></div>
             </div>
         </div>
 

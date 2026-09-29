@@ -64,6 +64,9 @@
     /* -----------------------------------------------------
        LOGIN PROMPT
        ----------------------------------------------------- */
+        /* -----------------------------------------------------
+       LOGIN PROMPT — rediseñado
+       ----------------------------------------------------- */
     function renderLoginPrompt() {
         profileContent.innerHTML = `
             <header class="profile-header-pro">
@@ -73,14 +76,60 @@
                     </div>
                 </div>
             </header>
-            <div class="login-required">
-                <i class="fa-solid fa-user-lock"></i>
-                <h3>No has iniciado sesión</h3>
-                <p>Inicia sesión para ver tu perfil, guardar favoritos y publicar.</p>
-                <button class="btn-primary" id="btn-profile-login">Iniciar sesión</button>
+
+            <div class="profile-unauth">
+                <div class="profile-unauth-hero">
+                    <div class="profile-unauth-icon">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                    <h2>Tu cuenta PipGo</h2>
+                    <p>Inicia sesión para guardar favoritos, publicar productos y contactar vendedores.</p>
+
+                    <div class="profile-unauth-actions">
+                        <button class="btn-primary btn-large" id="btn-profile-login">
+                            <i class="fa-solid fa-right-to-bracket"></i> Iniciar sesión
+                        </button>
+                        <button class="profile-unauth-btn-secondary" id="btn-profile-register">
+                            <i class="fa-solid fa-user-plus"></i> Crear cuenta nueva
+                        </button>
+                    </div>
+                </div>
+
+                <div class="profile-unauth-benefits">
+                    <div class="profile-unauth-benefit">
+                        <div class="profile-unauth-benefit-icon tone-green">
+                            <i class="fa-solid fa-bookmark"></i>
+                        </div>
+                        <div class="profile-unauth-benefit-text">
+                            <h4>Guarda tus favoritos</h4>
+                            <p>Marca productos y encuéntralos cuando los necesites.</p>
+                        </div>
+                    </div>
+                    <div class="profile-unauth-benefit">
+                        <div class="profile-unauth-benefit-icon tone-warm">
+                            <i class="fa-solid fa-store"></i>
+                        </div>
+                        <div class="profile-unauth-benefit-text">
+                            <h4>Conviértete en vendedor</h4>
+                            <p>Publica tus productos y llega a más clientes cerca de ti.</p>
+                        </div>
+                    </div>
+                    <div class="profile-unauth-benefit">
+                        <div class="profile-unauth-benefit-icon tone-coffee">
+                            <i class="fa-solid fa-comments"></i>
+                        </div>
+                        <div class="profile-unauth-benefit-text">
+                            <h4>Contacta directo</h4>
+                            <p>Habla con vendedores por WhatsApp o llamada.</p>
+                        </div>
+                    </div>
+                </div>
             </div>`;
-        const btn = document.getElementById('btn-profile-login');
-        if (btn) btn.addEventListener('click', () => AuthUI.openAuthModal('login'));
+
+        const btnLogin = document.getElementById('btn-profile-login');
+        const btnRegister = document.getElementById('btn-profile-register');
+        if (btnLogin) btnLogin.addEventListener('click', () => AuthUI.openAuthModal('login'));
+        if (btnRegister) btnRegister.addEventListener('click', () => AuthUI.openAuthModal('register'));
     }
 
     /* -----------------------------------------------------

@@ -1,8 +1,6 @@
 /* =====================================================
    PIPGO · ADMIN SERVICE
    Única fuente de verdad para operaciones administrativas.
-   Toda operación crítica se ejecuta con batch atómico.
-   La seguridad REAL vive en Firestore Rules (isAdmin por email).
    ===================================================== */
 
 window.AdminService = {
@@ -24,12 +22,13 @@ window.AdminService = {
     },
 
     /* -------------------------------------------------
-       DASHBOARD — estadísticas reales
+       DASHBOARD
        ------------------------------------------------- */
     async getDashboardStats() {
-        const [usersSnap, appsSnap] = await Promise.all([
+        const [usersSnap, appsSnap, recoveriesSnap] = await Promise.all([
             db.collection(CONFIG.COLLECTIONS.USERS).get(),
-            db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS).get()
+            db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS).get(),
+            db.collection('solicitudesRecuperacion').where('status', '==', 'pending').get()
         ]);
 
         let pending = 0, approved = 0, rejected = 0, needsInfo = 0;
@@ -47,14 +46,13 @@ window.AdminService = {
             pending,
             approved,
             rejected,
-            needsInfo
+            needsInfo,
+            pendingRecoveries: recoveriesSnap.size
         };
     },
 
     /* -------------------------------------------------
-       SOLICITUDES
-       filter: 'all' | 'pending' | 'approved' | 'rejected' | 'needs_info'
-       Devuelve solicitudes enriquecidas con datos del usuario.
+       SOLICITUDES DE VENDEDOR
        ------------------------------------------------- */
     async listApplications(filter = 'all') {
         let query = db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS);
@@ -67,7 +65,6 @@ window.AdminService = {
 
         if (!apps.length) return [];
 
-        // Enriquecer con usuarios (una sola query)
         const usersSnap = await db.collection(CONFIG.COLLECTIONS.USERS).get();
         const usersById = {};
         usersSnap.forEach(u => { usersById[u.id] = u.data(); });
@@ -77,7 +74,6 @@ window.AdminService = {
             return { ...app, id: uid, user: usersById[uid] || {} };
         });
 
-        // Orden descendente por submittedAt
         enriched.sort((a, b) => {
             const ta = a.submittedAt && a.submittedAt.toDate ? a.submittedAt.toDate().getTime() : 0;
             const tb = b.submittedAt && b.submittedAt.toDate ? b.submittedAt.toDate().getTime() : 0;
@@ -96,7 +92,7 @@ window.AdminService = {
     },
 
     /* -------------------------------------------------
-       ACCIÓN: APROBAR
+       ACCIÓN: APROBAR VENDEDOR
        ------------------------------------------------- */
     async approve(uid) {
         if (!this.isAdmin()) throw new Error('FORBIDDEN');
@@ -125,7 +121,7 @@ window.AdminService = {
     },
 
     /* -------------------------------------------------
-       ACCIÓN: RECHAZAR
+       ACCIÓN: RECHAZAR VENDEDOR
        ------------------------------------------------- */
     async reject(uid, reason) {
         if (!this.isAdmin()) throw new Error('FORBIDDEN');
@@ -176,5 +172,70 @@ window.AdminService = {
             { merge: true }
         );
         await batch.commit();
+    },
+
+    /* =================================================
+       RECUPERACIÓN DE CONTRASEÑA
+       ================================================= */
+
+    /**
+     * Lista solicitudes de recuperación por estado.
+     * @param {'pending'|'approved'|'rejected'|'all'} filter
+     */
+    async listPasswordResetRequests(filter = 'pending') {
+        let query = db.collection('solicitudesRecuperacion');
+        if (filter && filter !== 'all') {
+            query = query.where('status', '==', filter);
+        }
+
+        const snap = await query.get();
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        list.sort((a, b) => {
+            const ta = a.requestedAt && a.requestedAt.toDate ? a.requestedAt.toDate().getTime() : 0;
+            const tb = b.requestedAt && b.requestedAt.toDate ? b.requestedAt.toDate().getTime() : 0;
+            return tb - ta;
+        });
+
+        return list;
+    },
+
+    /**
+     * Aprueba una solicitud y dispara el email estándar
+     * de Firebase al usuario para que cambie su contraseña.
+     */
+    async approvePasswordReset(docId, email) {
+        if (!this.isAdmin()) throw new Error('FORBIDDEN');
+
+        // 1) Primero enviamos el email (si falla, no marcamos como aprobado).
+        await AuthService.sendPasswordResetEmail(email);
+
+        // 2) Marcamos la solicitud como aprobada.
+        const adminUid = this.getAdminUid();
+        const now = firebase.firestore.FieldValue.serverTimestamp();
+
+        await db.collection('solicitudesRecuperacion').doc(docId).update({
+            status: 'approved',
+            reviewedAt: now,
+            reviewedBy: adminUid,
+            emailSentAt: now,
+            rejectionReason: null
+        });
+    },
+
+    /**
+     * Rechaza una solicitud de recuperación.
+     */
+    async rejectPasswordReset(docId, reason) {
+        if (!this.isAdmin()) throw new Error('FORBIDDEN');
+        const adminUid = this.getAdminUid();
+        const now = firebase.firestore.FieldValue.serverTimestamp();
+
+        await db.collection('solicitudesRecuperacion').doc(docId).update({
+            status: 'rejected',
+            reviewedAt: now,
+            reviewedBy: adminUid,
+            rejectionReason: reason || ''
+        });
     }
 };
