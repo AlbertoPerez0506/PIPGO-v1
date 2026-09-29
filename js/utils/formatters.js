@@ -12,11 +12,18 @@ window.Formatters = {
         return div.innerHTML;
     },
 
+    /**
+     * FIX: ahora permite blob: además de http/https.
+     * Las vistas previas usan URL.createObjectURL() que
+     * devuelve blob: — antes se bloqueaban silenciosamente.
+     * Sigue rechazando javascript:, data:, file:, etc.
+     */
     safeUrl(url) {
         if (!url) return '';
         try {
             const u = new URL(String(url), window.location.origin);
-            if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+            const allowedProtocols = ['http:', 'https:', 'blob:'];
+            if (allowedProtocols.includes(u.protocol)) return u.href;
         } catch (e) {}
         return '';
     },
@@ -31,7 +38,6 @@ window.Formatters = {
         return `hace ${Math.floor(diff / 86400)} días`;
     },
 
-    /* ---------- Precio básico ---------- */
     formatPrice(value) {
         if (value == null || value === '') return '';
         let str = String(value).trim();
@@ -47,7 +53,6 @@ window.Formatters = {
         return '$' + str;
     },
 
-    /* ---------- Precio + unidad: "$25 / kg" ---------- */
     formatPriceWithUnit(price, unitCode) {
         const base = this.formatPrice(price);
         if (!base) return '';
@@ -78,9 +83,6 @@ window.Formatters = {
         return `${(meters / 1000).toFixed(1)} km`;
     },
 
-    /* =================================================
-       HORARIOS
-       ================================================= */
     formatScheduleCompact(schedule) {
         if (!schedule || !schedule.days || !schedule.days.length ||
             !schedule.start || !schedule.end) return '';

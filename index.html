@@ -148,220 +148,323 @@
                     <button class="btn-primary" id="btn-go-auth">Iniciar sesión</button>
                 </div>
 
-                <div class="form-wrapper hidden" id="form-wrapper">
-                    <div class="form-step" id="step-type">
-                        <h3 class="step-title">¿Qué tipo de vendedor eres?</h3>
-                        <p class="step-subtitle">Elige la opción que mejor te describa</p>
-                        <div class="seller-options">
-                            <button class="seller-card" id="type-calle" data-type="calle">
-                                <div class="seller-icon"><i class="fa-solid fa-store"></i></div>
-                                <span class="seller-name">Punto de comercialización Local</span>
-                                <span class="seller-desc">Productos temporales y ambulantes</span>
-                                <i class="fa-solid fa-chevron-right"></i>
-                            </button>
-                            <button class="seller-card" id="type-establecimiento" data-type="establecimiento">
-                                <div class="seller-icon"><i class="fa-solid fa-shop"></i></div>
-                                <span class="seller-name">Establecimiento</span>
-                                <span class="seller-desc">Negocio con ubicación permanente</span>
-                                <i class="fa-solid fa-chevron-right"></i>
-                            </button>
+               <div class="form-wrapper hidden" id="form-wrapper">
+
+    <!-- =====================================================
+         PASO 1: SELECCIÓN DE TIPO DE VENDEDOR
+         ===================================================== -->
+    <div class="form-step" id="step-type">
+        <div class="step-hero">
+            <span class="step-hero-eyebrow">
+                <i class="fa-solid fa-bullhorn"></i> Nueva publicación
+            </span>
+            <h3 class="step-title">¿Cómo vas a vender?</h3>
+            <p class="step-subtitle">Elige el tipo de vendedor que mejor describe tu negocio</p>
+        </div>
+
+        <div class="seller-options-pro">
+            <button type="button" class="seller-card-pro seller-card-ambulante" id="type-calle" data-type="calle">
+                <div class="seller-card-pro-badge">Más común</div>
+                <div class="seller-card-pro-icon">
+                    <i class="fa-solid fa-store"></i>
+                </div>
+                <div class="seller-card-pro-body">
+                    <h4 class="seller-card-pro-name">Puesto Ambulante</h4>
+                    <p class="seller-card-pro-desc">Vendes en tianguis, ferias, esquinas o de casa en casa</p>
+                    <ul class="seller-card-pro-features">
+                        <li><i class="fa-solid fa-check"></i> Sin ubicación fija</li>
+                        <li><i class="fa-solid fa-check"></i> Productos del día</li>
+                        <li><i class="fa-solid fa-check"></i> Ideal para comenzar</li>
+                    </ul>
+                </div>
+                <div class="seller-card-pro-arrow">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </div>
+            </button>
+
+            <button type="button" class="seller-card-pro seller-card-local" id="type-establecimiento" data-type="establecimiento">
+                <div class="seller-card-pro-icon">
+                    <i class="fa-solid fa-shop"></i>
+                </div>
+                <div class="seller-card-pro-body">
+                    <h4 class="seller-card-pro-name">Local Establecido</h4>
+                    <p class="seller-card-pro-desc">Tienes un lugar fijo donde tus clientes te encuentran</p>
+                    <ul class="seller-card-pro-features">
+                        <li><i class="fa-solid fa-check"></i> Ubicación permanente</li>
+                        <li><i class="fa-solid fa-check"></i> Horario definido</li>
+                        <li><i class="fa-solid fa-check"></i> Mayor confianza</li>
+                    </ul>
+                </div>
+                <div class="seller-card-pro-arrow">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- =====================================================
+         PASO 2: FORMULARIO
+         ===================================================== -->
+    <form id="publication-form" class="publication-form hidden">
+        <button type="button" class="btn-back" id="btn-back-type">
+            <i class="fa-solid fa-arrow-left"></i> Volver
+        </button>
+
+        <!-- Sección: Fotos -->
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-icon form-section-icon-photos">
+                    <i class="fa-solid fa-camera"></i>
+                </div>
+                <div>
+                    <h4>Fotos del producto</h4>
+                    <p>La principal es obligatoria</p>
+                </div>
+            </div>
+
+            <div class="photo-gallery" id="photo-gallery">
+                <div class="photo-slot main-slot" id="photo-slot-main">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>Foto principal</span>
+                    <input type="file" id="photo-input-main" accept="image/*" hidden>
+                    <img id="photo-preview-main" class="photo-preview hidden" alt="Foto principal">
+                    <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-main"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="photo-slot secondary-slot" id="photo-slot-2">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Foto 2</span>
+                    <input type="file" id="photo-input-2" accept="image/*" hidden>
+                    <img id="photo-preview-2" class="photo-preview hidden" alt="Foto 2">
+                    <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-2"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="photo-slot secondary-slot" id="photo-slot-3">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Foto 3</span>
+                    <input type="file" id="photo-input-3" accept="image/*" hidden>
+                    <img id="photo-preview-3" class="photo-preview hidden" alt="Foto 3">
+                    <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-3"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="photo-slot secondary-slot" id="photo-slot-4">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Foto 4</span>
+                    <input type="file" id="photo-input-4" accept="image/*" hidden>
+                    <img id="photo-preview-4" class="photo-preview hidden" alt="Foto 4">
+                    <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-4"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="photo-slot secondary-slot" id="photo-slot-5">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Foto 5</span>
+                    <input type="file" id="photo-input-5" accept="image/*" hidden>
+                    <img id="photo-preview-5" class="photo-preview hidden" alt="Foto 5">
+                    <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-5"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección: Producto -->
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-icon form-section-icon-product">
+                    <i class="fa-solid fa-box-open"></i>
+                </div>
+                <div>
+                    <h4>Datos del producto</h4>
+                    <p>Categoría, nombre y precio</p>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="product-category">Categoría</label>
+                <div class="select-pro-wrap">
+                    <i class="fa-solid fa-tag select-pro-icon"></i>
+                    <select id="product-category" required>
+                        <option value="" disabled selected>Selecciona una categoría</option>
+                        <option value="Frutas">Frutas</option>
+                        <option value="Verduras">Verduras</option>
+                        <option value="Antojitos">Antojitos</option>
+                        <option value="Comida preparada">Comida preparada</option>
+                        <option value="Bebidas">Bebidas</option>
+                        <option value="Postres">Postres</option>
+                        <option value="Panadería">Panadería</option>
+                        <option value="Carnes">Carnes</option>
+                        <option value="Mariscos">Mariscos</option>
+                        <option value="Lácteos">Lácteos</option>
+                        <option value="Productos del campo">Productos del campo</option>
+                        <option value="Artesanías">Artesanías</option>
+                        <option value="Ropa y accesorios">Ropa y accesorios</option>
+                        <option value="Belleza y cuidado">Belleza y cuidado</option>
+                        <option value="Hogar">Hogar</option>
+                        <option value="Electrónica">Electrónica</option>
+                        <option value="Mascotas">Mascotas</option>
+                        <option value="Servicios">Servicios</option>
+                        <option value="Juguetes">Juguetes</option>
+                        <option value="Otros">Otros</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down select-pro-arrow"></i>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="store-name">Nombre del establecimiento <span class="optional-tag">Opcional</span></label>
+                <input type="text" id="store-name" placeholder="Establecimiento" maxlength="60">
+            </div>
+
+            <div class="input-group">
+                <label for="product-name">Nombre del producto</label>
+                <input type="text" id="product-name" placeholder="Nombre del producto" required maxlength="60">
+            </div>
+
+            <div class="input-group">
+                <label for="product-price">Precio</label>
+                <div class="input-prefix-wrap">
+                    <span class="input-prefix">$</span>
+                    <input type="tel" id="product-price" placeholder="0.00" inputmode="decimal" required>
+                </div>
+            </div>
+
+            <div class="input-group hidden" id="unit-group">
+                <label for="product-unit">Unidad de venta</label>
+                <div class="select-pro-wrap">
+                    <i class="fa-solid fa-scale-balanced select-pro-icon"></i>
+                    <select id="product-unit"></select>
+                    <i class="fa-solid fa-chevron-down select-pro-arrow"></i>
+                </div>
+                <p class="form-hint" id="unit-hint">Se mostrará como "$0 / unidad".</p>
+            </div>
+
+            <div class="input-group hidden" id="presentation-group">
+                <label>Presentación <span class="optional-tag">Opcional</span></label>
+                <div class="presentation-row">
+                    <input type="tel" id="product-presentation-qty" placeholder="Cantidad" inputmode="decimal" maxlength="8">
+                    <select id="product-presentation-unit"></select>
+                </div>
+                <p class="form-hint">Cantidad con la que se vende, por ejemplo: 500 g, 1 kg, 12 piezas.</p>
+            </div>
+
+            <div class="input-group hidden" id="condition-group">
+                <label>Condición</label>
+                <div class="condition-chips" id="condition-chips" role="radiogroup" aria-label="Condición del producto"></div>
+            </div>
+        </div>
+
+        <!-- Sección: Descripción -->
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-icon form-section-icon-desc">
+                    <i class="fa-solid fa-pen"></i>
+                </div>
+                <div>
+                    <h4>Descripción</h4>
+                    <p>Cuéntale al comprador qué ofreces</p>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="product-desc">Descripción</label>
+                <textarea id="product-desc" rows="3" placeholder="Describe tu producto, calidad, condición…" maxlength="400"></textarea>
+                <p class="char-counter" id="desc-counter">0 / 400</p>
+            </div>
+
+            <div class="input-group">
+                <label for="product-extra-refs">Referencias <span class="optional-tag">Opcional</span></label>
+                <textarea id="product-extra-refs" rows="2" placeholder="Detalles extra que solo verá quien abra la publicación (cómo llegar, etc.)" maxlength="300"></textarea>
+            </div>
+        </div>
+
+        <!-- Sección: Contacto -->
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-icon form-section-icon-contact">
+                    <i class="fa-solid fa-phone"></i>
+                </div>
+                <div>
+                    <h4>Contacto</h4>
+                    <p>Cómo te contactan los compradores</p>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="product-phone">Teléfono de contacto <span class="optional-tag">Opcional</span></label>
+                <div class="input-prefix-wrap">
+                    <span class="input-prefix"><i class="fa-solid fa-phone"></i></span>
+                    <input type="tel" id="product-phone" placeholder="961 123 4567" inputmode="tel" maxlength="20">
+                </div>
+                <label class="form-checkbox" for="product-has-whatsapp">
+                    <input type="checkbox" id="product-has-whatsapp">
+                    <span class="form-checkbox-label">
+                        <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
+                        Este número tiene WhatsApp
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Sección: Ubicación y horario -->
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-icon form-section-icon-location">
+                    <i class="fa-solid fa-location-dot"></i>
+                </div>
+                <div>
+                    <h4>Ubicación y horario</h4>
+                    <p>Dónde y cuándo encontrarte</p>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="product-ref">Referencia del lugar</label>
+                <input type="text" id="product-ref" placeholder="Calle, colonia, referencias del punto…" required maxlength="120">
+                <button type="button" class="btn-location" id="btn-get-location">
+                    <i class="fa-solid fa-location-crosshairs"></i> Usar mi ubicación
+                </button>
+            </div>
+
+            <div class="input-group schedule-group">
+                <label>Horario <span class="optional-tag">Opcional</span></label>
+                <button type="button" class="schedule-toggle" id="schedule-toggle" aria-expanded="false">
+                    <i class="fa-regular fa-clock"></i>
+                    <span id="schedule-toggle-text">Agregar horario</span>
+                    <i class="fa-solid fa-chevron-down schedule-chevron"></i>
+                </button>
+                <div class="schedule-panel hidden" id="schedule-panel">
+                    <div class="schedule-days" id="schedule-days" role="group" aria-label="Días del horario">
+                        <button type="button" data-day="1">L</button>
+                        <button type="button" data-day="2">M</button>
+                        <button type="button" data-day="3">X</button>
+                        <button type="button" data-day="4">J</button>
+                        <button type="button" data-day="5">V</button>
+                        <button type="button" data-day="6">S</button>
+                        <button type="button" data-day="0">D</button>
+                    </div>
+                    <div class="schedule-times">
+                        <div class="input-group">
+                            <label for="schedule-start">Desde</label>
+                            <input type="time" id="schedule-start" value="08:00">
+                        </div>
+                        <div class="input-group">
+                            <label for="schedule-end">Hasta</label>
+                            <input type="time" id="schedule-end" value="12:00">
                         </div>
                     </div>
-
-                    <form id="publication-form" class="publication-form hidden">
-                        <button type="button" class="btn-back" id="btn-back-type">
-                            <i class="fa-solid fa-arrow-left"></i> Volver
-                        </button>
-
-                        <div class="photo-gallery" id="photo-gallery">
-                            <div class="photo-slot main-slot" id="photo-slot-main">
-                                <i class="fa-solid fa-camera"></i>
-                                <span>Foto principal</span>
-                                <input type="file" id="photo-input-main" accept="image/*" hidden>
-                                <img id="photo-preview-main" class="photo-preview hidden" alt="Foto principal">
-                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-main"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                            <div class="photo-slot secondary-slot" id="photo-slot-2">
-                                <i class="fa-solid fa-plus"></i>
-                                <span>Foto 2</span>
-                                <input type="file" id="photo-input-2" accept="image/*" hidden>
-                                <img id="photo-preview-2" class="photo-preview hidden" alt="Foto 2">
-                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-2"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                            <div class="photo-slot secondary-slot" id="photo-slot-3">
-                                <i class="fa-solid fa-plus"></i>
-                                <span>Foto 3</span>
-                                <input type="file" id="photo-input-3" accept="image/*" hidden>
-                                <img id="photo-preview-3" class="photo-preview hidden" alt="Foto 3">
-                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-3"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                            <div class="photo-slot secondary-slot" id="photo-slot-4">
-                                <i class="fa-solid fa-plus"></i>
-                                <span>Foto 4</span>
-                                <input type="file" id="photo-input-4" accept="image/*" hidden>
-                                <img id="photo-preview-4" class="photo-preview hidden" alt="Foto 4">
-                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-4"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                            <div class="photo-slot secondary-slot" id="photo-slot-5">
-                                <i class="fa-solid fa-plus"></i>
-                                <span>Foto 5</span>
-                                <input type="file" id="photo-input-5" accept="image/*" hidden>
-                                <img id="photo-preview-5" class="photo-preview hidden" alt="Foto 5">
-                                <button type="button" class="btn-remove-photo hidden" data-preview="photo-preview-5"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="product-category">Categoría</label>
-                            <div class="select-pro-wrap">
-                                <i class="fa-solid fa-tag select-pro-icon"></i>
-                                <select id="product-category" required>
-                                    <option value="" disabled selected>Selecciona una categoría</option>
-                                    <option value="Frutas">Frutas</option>
-                                    <option value="Verduras">Verduras</option>
-                                    <option value="Antojitos">Antojitos</option>
-                                    <option value="Comida preparada">Comida preparada</option>
-                                    <option value="Bebidas">Bebidas</option>
-                                    <option value="Postres">Postres</option>
-                                    <option value="Panadería">Panadería</option>
-                                    <option value="Carnes">Carnes</option>
-                                    <option value="Mariscos">Mariscos</option>
-                                    <option value="Lácteos">Lácteos</option>
-                                    <option value="Productos del campo">Productos del campo</option>
-                                    <option value="Artesanías">Artesanías</option>
-                                    <option value="Ropa y accesorios">Ropa y accesorios</option>
-                                    <option value="Belleza y cuidado">Belleza y cuidado</option>
-                                    <option value="Hogar">Hogar</option>
-                                    <option value="Electrónica">Electrónica</option>
-                                    <option value="Mascotas">Mascotas</option>
-                                    <option value="Servicios">Servicios</option>
-                                    <option value="Juguetes">Juguetes</option>
-                                    <option value="Otros">Otros</option>
-                                </select>
-                                <i class="fa-solid fa-chevron-down select-pro-arrow"></i>
-                            </div>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="store-name">Nombre del establecimiento <span class="optional-tag">Opcional</span></label>
-                            <input type="text" id="store-name" placeholder="Establecimiento" maxlength="60">
-                        </div>
-
-                        <div class="input-group">
-                            <label for="product-name">Nombre del producto</label>
-                            <input type="text" id="product-name" placeholder="Nombre del producto" required maxlength="60">
-                        </div>
-
-                        <div class="input-group">
-                            <label for="product-price">Precio</label>
-                            <div class="input-prefix-wrap">
-                                <span class="input-prefix">$</span>
-                                <input type="tel" id="product-price" placeholder="0.00" inputmode="decimal" required>
-                            </div>
-                        </div>
-
-                        <div class="input-group hidden" id="unit-group">
-                            <label for="product-unit">Unidad de venta</label>
-                            <div class="select-pro-wrap">
-                                <i class="fa-solid fa-scale-balanced select-pro-icon"></i>
-                                <select id="product-unit"></select>
-                                <i class="fa-solid fa-chevron-down select-pro-arrow"></i>
-                            </div>
-                            <p class="form-hint" id="unit-hint">Se mostrará como "$0 / unidad".</p>
-                        </div>
-
-                        <div class="input-group hidden" id="presentation-group">
-                            <label>Presentación <span class="optional-tag">Opcional</span></label>
-                            <div class="presentation-row">
-                                <input type="tel" id="product-presentation-qty" placeholder="Cantidad" inputmode="decimal" maxlength="8">
-                                <select id="product-presentation-unit"></select>
-                            </div>
-                            <p class="form-hint">Cantidad con la que se vende, por ejemplo: 500 g, 1 kg, 12 piezas.</p>
-                        </div>
-
-                        <div class="input-group hidden" id="condition-group">
-                            <label>Condición</label>
-                            <div class="condition-chips" id="condition-chips" role="radiogroup" aria-label="Condición del producto"></div>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="product-phone">Teléfono de contacto <span class="optional-tag">Opcional</span></label>
-                            <div class="input-prefix-wrap">
-                                <span class="input-prefix"><i class="fa-solid fa-phone"></i></span>
-                                <input type="tel" id="product-phone" placeholder="961 123 4567" inputmode="tel" maxlength="20">
-                            </div>
-                            <label class="form-checkbox" for="product-has-whatsapp">
-                                <input type="checkbox" id="product-has-whatsapp">
-                                <span class="form-checkbox-label">
-                                    <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
-                                    Este número tiene WhatsApp
-                                </span>
-                            </label>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="product-desc">Descripción</label>
-                            <textarea id="product-desc" rows="3" placeholder="Describe tu producto, calidad, condición…" maxlength="400"></textarea>
-                            <p class="char-counter" id="desc-counter">0 / 400</p>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="product-extra-refs">Referencias <span class="optional-tag">Opcional</span></label>
-                            <textarea id="product-extra-refs" rows="2" placeholder="Detalles extra que solo verá quien abra la publicación (cómo llegar, etc.)" maxlength="300"></textarea>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="product-ref">Referencia del lugar</label>
-                            <input type="text" id="product-ref" placeholder="Calle, colonia, referencias del punto…" required maxlength="120">
-                            <button type="button" class="btn-location" id="btn-get-location">
-                                <i class="fa-solid fa-location-crosshairs"></i> Usar mi ubicación
-                            </button>
-                        </div>
-
-                        <div class="input-group schedule-group">
-                            <label>Horario <span class="optional-tag">Opcional</span></label>
-                            <button type="button" class="schedule-toggle" id="schedule-toggle" aria-expanded="false">
-                                <i class="fa-regular fa-clock"></i>
-                                <span id="schedule-toggle-text">Agregar horario</span>
-                                <i class="fa-solid fa-chevron-down schedule-chevron"></i>
-                            </button>
-                            <div class="schedule-panel hidden" id="schedule-panel">
-                                <div class="schedule-days" id="schedule-days" role="group" aria-label="Días del horario">
-                                    <button type="button" data-day="1">L</button>
-                                    <button type="button" data-day="2">M</button>
-                                    <button type="button" data-day="3">X</button>
-                                    <button type="button" data-day="4">J</button>
-                                    <button type="button" data-day="5">V</button>
-                                    <button type="button" data-day="6">S</button>
-                                    <button type="button" data-day="0">D</button>
-                                </div>
-                                <div class="schedule-times">
-                                    <div class="input-group">
-                                        <label for="schedule-start">Desde</label>
-                                        <input type="time" id="schedule-start" value="08:00">
-                                    </div>
-                                    <div class="input-group">
-                                        <label for="schedule-end">Hasta</label>
-                                        <input type="time" id="schedule-end" value="12:00">
-                                    </div>
-                                </div>
-                                <button type="button" class="btn-clear-schedule hidden" id="btn-clear-schedule">
-                                    <i class="fa-solid fa-trash"></i> Quitar horario
-                                </button>
-                            </div>
-                        </div>
-
-                        <div id="form-error" class="form-error hidden"></div>
-
-                        <button type="button" class="btn-outline btn-preview" id="btn-preview">
-                            <i class="fa-solid fa-eye"></i> Vista previa
-                        </button>
-
-                        <button type="submit" class="btn-primary btn-submit" id="btn-submit">
-                            <i class="fa-solid fa-paper-plane"></i> <span id="btn-submit-text">Publicar anuncio</span>
-                        </button>
-                    </form>
+                    <button type="button" class="btn-clear-schedule hidden" id="btn-clear-schedule">
+                        <i class="fa-solid fa-trash"></i> Quitar horario
+                    </button>
                 </div>
+            </div>
+        </div>
+
+        <div id="form-error" class="form-error hidden"></div>
+
+        <div class="form-actions-sticky">
+            <button type="button" class="btn-outline btn-preview" id="btn-preview">
+                <i class="fa-solid fa-eye"></i> Vista previa
+            </button>
+            <button type="submit" class="btn-primary btn-submit" id="btn-submit">
+                <i class="fa-solid fa-paper-plane"></i> <span id="btn-submit-text">Publicar anuncio</span>
+            </button>
+        </div>
+    </form>
+</div>
             </section>
 
             <!-- ============ VISTA: PERFIL ============ -->

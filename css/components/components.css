@@ -134,7 +134,6 @@
 .product-favorite:active { transform: scale(0.9); }
 .product-favorite.is-fav { color: var(--primary); }
 
-/* Información de la tarjeta */
 .product-info { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; }
 
 .product-info h4 {
@@ -219,7 +218,6 @@
 }
 .input-group textarea { resize: vertical; min-height: 60px; }
 
-/* Select con ícono */
 .select-pro-wrap {
     position: relative;
     display: flex; align-items: center;
@@ -244,7 +242,6 @@
     pointer-events: none;
 }
 
-/* Input con prefijo ($) */
 .input-prefix-wrap {
     position: relative;
     display: flex; align-items: center;
@@ -353,7 +350,6 @@
 .btn-clear-schedule.hidden { display: none; }
 
 /* ---------- Photo gallery (publicar) ---------- */
-/* FIX: grid-auto-rows garantiza altura de la fila 3 donde caen los slots 4 y 5 */
 .photo-gallery {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -432,7 +428,7 @@
 .auth-form { display: flex; flex-direction: column; gap: 16px; }
 
 /* =====================================================
-   SETTINGS (AJUSTES) — rediseñado
+   SETTINGS (AJUSTES)
    ===================================================== */
 .settings-modal-pro { padding: 22px 20px; }
 
@@ -739,7 +735,6 @@
 }
 .sheet-refs-block.hidden { display: none; }
 
-/* ---------- Bloque de horario en el sheet ---------- */
 .sheet-schedule-block {
     display: flex; align-items: flex-start; gap: 12px;
     background: var(--star-light);
@@ -798,27 +793,70 @@
     flex-shrink: 0;
 }
 
+/* =====================================================
+   CONTACTO EN EL SHEET
+   FIX: el teléfono ya no se encima con los botones.
+   Ahora el número tiene ellipsis y los botones no
+   se comprimen.
+   ===================================================== */
 .sheet-contact-row {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     padding: 12px 14px;
     background: var(--bg);
     border-radius: var(--radius-sm);
     margin-bottom: 16px;
+    min-width: 0;
 }
 .sheet-contact-row.hidden { display: none; }
+
 .contact-info {
     display: flex; align-items: center; gap: 8px;
     font-size: 14px; font-weight: 600;
     color: var(--text-primary);
     min-width: 0;
+    flex: 1 1 0;
+    overflow: hidden;
 }
-.contact-info i { color: var(--accent); font-size: 13px; }
+.contact-info i {
+    color: var(--accent);
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.contact-info span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.sheet-contact-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+}
+
 .btn-call {
     padding: 8px 16px !important;
     font-size: 13px !important;
     text-decoration: none;
     flex-shrink: 0;
+    white-space: nowrap;
+}
+
+@media (max-width: 360px) {
+    .sheet-contact-row {
+        flex-wrap: wrap;
+    }
+    .sheet-contact-actions {
+        width: 100%;
+        justify-content: flex-end;
+        margin-top: 6px;
+    }
 }
 
 .sheet-actions { display: flex; gap: 12px; margin-bottom: 12px; }
@@ -902,7 +940,6 @@
 
 /* =====================================================
    ACCIONES DE TARJETA (Perfil → Mis publicaciones)
-   Jerarquía: Editar (primaria), Vendido (secundaria), Eliminar (terciaria)
    ===================================================== */
 .card-actions {
     display: flex;
@@ -957,12 +994,6 @@
 }
 .card-action-btn.btn-delete:active { background: var(--danger-bg); }
 
-/* =====================================================
-   Móvil: los textos no caben en la card de 2 columnas.
-   Mostramos solo-iconos y repartimos los 3 botones
-   equitativamente. El texto sigue existiendo (span) pero
-   oculto visualmente; aria-label cubre accesibilidad.
-   ===================================================== */
 @media (max-width: 599px) {
     .card-action-label { display: none; }
     .card-action-btn {
@@ -976,7 +1007,6 @@
     .card-action-btn i { font-size: 13px; }
 }
 
-/* Botones heredados (compatibilidad) */
 .btn-edit, .btn-delete, .btn-sold {
     border: none; border-radius: 10px;
     padding: 9px 10px; font-weight: 700; font-size: 12px;
@@ -989,8 +1019,6 @@
 .btn-sold { background: var(--coffee-light); color: var(--coffee-dark); flex: 1; justify-content: center; }
 .btn-edit:active, .btn-delete:active, .btn-sold:active { transform: scale(0.95); opacity: 0.9; }
 
-
-/* Variante danger del botón primary (para ConfirmDialog) */
 .btn-primary.btn-danger {
     background: var(--danger-fg);
     box-shadow: 0 10px 25px rgba(185, 28, 28, 0.28);
@@ -1000,7 +1028,4 @@
     box-shadow: 0 4px 12px rgba(185, 28, 28, 0.2);
 }
 
-/* Saltos de línea en textos de modales.
-   Las reglas tipográficas viven en settings-extras.css.
-   Aquí solo lo esencial del comportamiento. */
 .unsaved-text { white-space: pre-line; }

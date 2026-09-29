@@ -4,7 +4,18 @@
     let initialized = false;
 
     function switchView(viewName, { push = false, force = false } = {}) {
-        if (viewName === AppState.currentView && !push) return;
+        const isSameView = viewName === AppState.currentView;
+
+        // FIX: si el usuario toca la pestaña donde ya está,
+        // solo hacemos scroll al top y NO re-renderizamos.
+        // Antes se disparaba una re-renderización que podía
+        // destruir listeners de botones (admin, ajustes, etc).
+        if (isSameView && push && !force) {
+            mainContent.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+
+        if (isSameView && !push && !force) return;
 
         // Guard de cambios sin guardar al salir de "anunciarme"
         if (!force &&
