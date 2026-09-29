@@ -244,6 +244,14 @@
         }
     }
 
+    /* =====================================================
+       AUTH OBSERVER
+       FIX: cada actualización de UI va protegida con su
+       propio try/catch. Antes, un error en cualquier
+       eslabón (updateAuthUI, updateAllButtons, etc.)
+       interrumpía la cadena y el perfil nunca se
+       renderizaba tras iniciar sesión.
+       ===================================================== */
     function initializeAuthObserver() {
         AuthService.onAuthStateChanged(async (user) => {
             const wasAuthenticated = !!AppState.currentUser;
@@ -251,9 +259,26 @@
 
             if (user) {
                 try {
-                    const profile = await UserService.getProfile(user.uid);
+                    let profile = await UserService.getProfile(user.uid);
+
+                    // Reintento corto por si el doc aún no se ha propagado.
+                    if (!profile) {
+                        for (let i = 0; i < 3 && !profile; i++) {
+                            await new Promise(r => setTimeout(r, 300));
+                            profile = await UserService.getProfile(user.uid);
+                        }
+                    }
+
                     AppState.currentProfile = profile;
-                    await FavoriteUI.loadFavorites(user.uid);
+
+                    if (profile) {
+                        try { await FavoriteUI.loadFavorites(user.uid); } catch (e) {}
+                    }
+
+                    Logger.info('Auth observer: perfil', {
+                        uid: user.uid,
+                        hasProfile: !!profile
+                    });
                 } catch (error) {
                     Logger.error('Error cargando perfil al autenticar', error);
                     AppState.currentProfile = null;
@@ -266,10 +291,27 @@
                 }
             }
 
-            updateHomeGreeting(user);
-            PublicationUI.updateAuthUI();
-            ProfileUI.renderProfile();
-            FavoriteUI.updateAllButtons();
+            // Cada actualización protegida de forma independiente.
+            try { updateHomeGreeting(user); }
+            catch (e) { Logger.error('updateHomeGreeting falló', e); }
+
+            try {
+                if (window.PublicationUI && PublicationUI.updateAuthUI) {
+                    PublicationUI.updateAuthUI();
+                }
+            } catch (e) { Logger.error('updateAuthUI falló', e); }
+
+            try {
+                if (window.ProfileUI && ProfileUI.renderProfile) {
+                    ProfileUI.renderProfile();
+                }
+            } catch (e) { Logger.error('renderProfile falló', e); }
+
+            try {
+                if (window.FavoriteUI && FavoriteUI.updateAllButtons) {
+                    FavoriteUI.updateAllButtons();
+                }
+            } catch (e) { Logger.error('updateAllButtons falló', e); }
 
             if (user && AppState.pendingAction) {
                 setTimeout(runPendingAction, 180);

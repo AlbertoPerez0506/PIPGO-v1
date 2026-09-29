@@ -1,14 +1,6 @@
 /* =====================================================
    PIPGO · PROFILE UI
    Perfil + Ajustes + edición inline de username.
-
-   Reglas de la pestaña activa:
-   - Persiste dentro del perfil (mientras el usuario
-     navega, re-renders por avatar/username, etc.).
-   - Se resetea a "Mis publicaciones" cuando el usuario
-     entra al perfil viniendo de OTRA vista
-     (Home/Buscar/Publicar/Mensajes). Esto lo controla
-     NavigationUI llamando a ProfileUI.resetActiveTab().
    ===================================================== */
 
 (function () {
@@ -18,11 +10,12 @@
     let soldPublications = [];
     let initialized = false;
 
-    /* Lock contra renders concurrentes. */
-    let renderLock = null;
+    /* FIX: token de cancelación para renders concurrentes.
+       Cada llamada a renderProfile incrementa el token y
+       las operaciones asíncronas verifican que sigan siendo
+       el render "vigente" antes de tocar el DOM. */
+    let renderToken = 0;
 
-    /* Pestaña activa persistente dentro del perfil.
-       Valores: 'own' | 'fav' | 'sold'. */
     let activeProfileTab = 'own';
 
     let settingsModal, settingsClose;
@@ -55,19 +48,16 @@
         });
     }
 
-    /* Reset explícito. Invocado por NavigationUI al entrar
-       al perfil desde otra vista. */
     function resetActiveTab() {
         activeProfileTab = 'own';
     }
 
     /* -----------------------------------------------------
-       LOGIN PROMPT
-       ----------------------------------------------------- */
-        /* -----------------------------------------------------
        LOGIN PROMPT — rediseñado
        ----------------------------------------------------- */
     function renderLoginPrompt() {
+        if (!profileContent) return;
+
         profileContent.innerHTML = `
             <header class="profile-header-pro">
                 <div class="profile-header-row">
@@ -223,160 +213,191 @@
         });
     }
 
-    /* -----------------------------------------------------
+    /* =====================================================
        RENDER PRINCIPAL
-       ----------------------------------------------------- */
+       FIX: token-based cancellation + try/catch defensivo.
+       ===================================================== */
     async function renderProfile() {
-        if (renderLock) return renderLock;
+        if (!profileContent) return;
 
-        renderLock = (async () => {
-            try {
-                if (!AppState.currentUser) {
-                    renderLoginPrompt();
-                    return;
-                }
+        const token = ++renderToken;
 
-                const uid = AppState.currentUser.uid;
+        // Caso sin sesión: render inmediato y salir.
+        if (!AppState.currentUser) {
+            renderLoginPrompt();
+            return;
+        }
 
-                const hasContent = !!profileContent.querySelector('.profile-header-pro');
-                if (!hasContent) {
-                    profileContent.innerHTML = `
-                        <header class="profile-header-pro">
-                            <div class="profile-header-row">
-                                <div class="profile-heading">
-                                    <div class="title-row"><h2>Perfil</h2></div>
-                                </div>
-                            </div>
-                        </header>
-                        <p style="text-align:center;padding:40px;color:var(--text-tertiary);">Cargando perfil…</p>`;
-                }
+        const uid = AppState.currentUser.uid;
 
-                try {
-                    const profile = await UserService.getProfile(uid);
-                    if (!profile) {
-                        profileContent.innerHTML = `
-                            <header class="profile-header-pro">
-                                <div class="profile-header-row">
-                                    <div class="profile-heading">
-                                        <div class="title-row"><h2>Perfil</h2></div>
-                                    </div>
-                                </div>
-                            </header>
-                            <div class="login-required">
-                                <i class="fa-solid fa-triangle-exclamation"></i>
-                                <h3>Perfil no encontrado</h3>
-                            </div>`;
-                        return;
-                    }
-
-                    AppState.currentProfile = profile;
-                    ownPublications = await PublicationService.getUserPublications(uid);
-                    favorites = await FavoriteService.getFavoritePublications(uid);
-                    soldPublications = ownPublications.filter(p => p.status === 'sold');
-
-                    const activeCount = ownPublications.filter(p => p.status === 'active').length;
-
-                    const avatarHtml = profile.avatarUrl
-                        ? `<img src="${Formatters.safeUrl(profile.avatarUrl)}" alt="Avatar">`
-                        : `<i class="fa-solid fa-user profile-avatar-fallback-icon"></i>`;
-
-                    const isAdmin = window.AdminService && AdminService.isAdmin();
-                    const adminButtonHtml = isAdmin
-                        ? `<button class="profile-settings-btn profile-admin-btn" id="btn-open-admin" aria-label="Administración">
-                               <i class="fa-solid fa-shield-halved"></i>
-                           </button>`
-                        : '';
-
-                    /* La clase "active" en tabs y paneles NO se
-                       hardcodea aquí. Se aplica después con
-                       applyTabState() para respetar activeProfileTab. */
-                    profileContent.innerHTML = `
-                        <header class="profile-header-pro">
-                            <div class="profile-header-row">
-                                <div class="profile-heading">
-                                    <div class="title-row">
-                                        <h2>Perfil</h2>
-                                        ${adminButtonHtml}
-                                        <button class="profile-settings-btn" id="btn-open-settings" aria-label="Ajustes">
-                                            <i class="fa-solid fa-gear"></i>
-                                        </button>
-                                    </div>
-                                    <p class="profile-username">@${Formatters.escapeHtml(profile.username)}</p>
-                                </div>
-                                <div class="profile-avatar-wrap">
-                                    <div class="profile-avatar" id="profile-avatar">${avatarHtml}</div>
-                                    <button class="profile-avatar-edit" id="btn-change-avatar" aria-label="Cambiar foto">
-                                        <i class="fa-solid fa-camera"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="profile-stats-pro" role="list">
-                                <div class="stat-pro pub" role="listitem">
-                                    <span class="stat-number">${activeCount}</span>
-                                    <span class="stat-label">Publicaciones</span>
-                                </div>
-                                <div class="stat-pro fav" role="listitem">
-                                    <span class="stat-number">${favorites.length}</span>
-                                    <span class="stat-label">Favoritos</span>
-                                </div>
-                                <div class="stat-pro sold" role="listitem">
-                                    <span class="stat-number">${soldPublications.length}</span>
-                                    <span class="stat-label">Ventas</span>
-                                </div>
-                            </div>
-                        </header>
-                        ${renderSellerStatusCard()}
-                        <div class="profile-tabs" role="tablist">
-                            <button class="profile-tab" data-panel="own" role="tab" aria-selected="false">
-                                <i class="fa-solid fa-box-open"></i> Mis publicaciones
-                            </button>
-                            <button class="profile-tab" data-panel="fav" role="tab" aria-selected="false">
-                                <i class="fa-solid fa-bookmark"></i> Favoritos
-                            </button>
-                            <button class="profile-tab" data-panel="sold" role="tab" aria-selected="false">
-                                <i class="fa-solid fa-hand-holding-dollar"></i> Ventas
-                            </button>
+        const hasContent = !!profileContent.querySelector('.profile-header-pro');
+        if (!hasContent) {
+            profileContent.innerHTML = `
+                <header class="profile-header-pro">
+                    <div class="profile-header-row">
+                        <div class="profile-heading">
+                            <div class="title-row"><h2>Perfil</h2></div>
                         </div>
-                        <div class="profile-panel" id="panel-own">
-                            <div id="user-products-grid" class="products-grid"></div>
-                        </div>
-                        <div class="profile-panel" id="panel-fav">
-                            <div id="user-favorites-grid" class="products-grid"></div>
-                        </div>
-                        <div class="profile-panel" id="panel-sold">
-                            <div id="user-sold-grid" class="products-grid"></div>
-                        </div>`;
+                    </div>
+                </header>
+                <p style="text-align:center;padding:40px;color:var(--text-tertiary);">Cargando perfil…</p>`;
+        }
 
-                    renderOwnPublications(ownPublications);
-                    renderFavoritePublications(favorites);
-                    renderSoldPublications(soldPublications);
-                    wireSellerCard();
+        try {
+            let profile = await UserService.getProfile(uid);
 
-                    /* Aplicar el estado de pestaña activa. */
-                    applyTabState();
+            // Otro render empezó mientras tanto → abortar silenciosamente.
+            if (token !== renderToken) return;
 
-                } catch (error) {
-                    Logger.error('Error cargando perfil', error);
-                    profileContent.innerHTML = `
-                        <header class="profile-header-pro">
-                            <div class="profile-header-row">
-                                <div class="profile-heading">
-                                    <div class="title-row"><h2>Perfil</h2></div>
-                                </div>
-                            </div>
-                        </header>
-                        <div class="login-required">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <h3>No pudimos cargar tu perfil</h3>
-                            <p>Inténtalo de nuevo más tarde.</p>
-                        </div>`;
+            if (!profile) {
+                for (let i = 0; i < 3 && !profile; i++) {
+                    await new Promise(r => setTimeout(r, 400));
+                    if (token !== renderToken) return;
+                    profile = await UserService.getProfile(uid);
                 }
-            } finally {
-                renderLock = null;
             }
-        })();
 
-        return renderLock;
+            if (token !== renderToken) return;
+
+            if (!profile) {
+                profileContent.innerHTML = `
+                    <header class="profile-header-pro">
+                        <div class="profile-header-row">
+                            <div class="profile-heading">
+                                <div class="title-row"><h2>Perfil</h2></div>
+                            </div>
+                        </div>
+                    </header>
+                    <div class="login-required">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <h3>Preparando tu perfil…</h3>
+                        <p>Espera unos segundos e inténtalo de nuevo.</p>
+                        <button class="btn-primary" id="btn-profile-retry">Reintentar</button>
+                    </div>`;
+                const btnRetry = document.getElementById('btn-profile-retry');
+                if (btnRetry) btnRetry.addEventListener('click', () => renderProfile());
+                return;
+            }
+
+            AppState.currentProfile = profile;
+
+            const [ownPubs, favs] = await Promise.all([
+                PublicationService.getUserPublications(uid).catch(err => {
+                    Logger.error('Error cargando publicaciones del perfil', err);
+                    return [];
+                }),
+                FavoriteService.getFavoritePublications(uid).catch(err => {
+                    Logger.error('Error cargando favoritos del perfil', err);
+                    return [];
+                })
+            ]);
+
+            if (token !== renderToken) return;
+
+            ownPublications = ownPubs || [];
+            favorites = favs || [];
+            soldPublications = ownPublications.filter(p => p.status === 'sold');
+
+            const activeCount = ownPublications.filter(p => p.status === 'active').length;
+
+            const avatarHtml = profile.avatarUrl
+                ? `<img src="${Formatters.safeUrl(profile.avatarUrl)}" alt="Avatar">`
+                : `<i class="fa-solid fa-user profile-avatar-fallback-icon"></i>`;
+
+            let isAdmin = false;
+            try { isAdmin = window.AdminService && AdminService.isAdmin(); } catch (e) {}
+
+            const adminButtonHtml = isAdmin
+                ? `<button class="profile-settings-btn profile-admin-btn" id="btn-open-admin" aria-label="Administración">
+                       <i class="fa-solid fa-shield-halved"></i>
+                   </button>`
+                : '';
+
+            profileContent.innerHTML = `
+                <header class="profile-header-pro">
+                    <div class="profile-header-row">
+                        <div class="profile-heading">
+                            <div class="title-row">
+                                <h2>Perfil</h2>
+                                ${adminButtonHtml}
+                                <button class="profile-settings-btn" id="btn-open-settings" aria-label="Ajustes">
+                                    <i class="fa-solid fa-gear"></i>
+                                </button>
+                            </div>
+                            <p class="profile-username">@${Formatters.escapeHtml(profile.username || '')}</p>
+                        </div>
+                        <div class="profile-avatar-wrap">
+                            <div class="profile-avatar" id="profile-avatar">${avatarHtml}</div>
+                            <button class="profile-avatar-edit" id="btn-change-avatar" aria-label="Cambiar foto">
+                                <i class="fa-solid fa-camera"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="profile-stats-pro" role="list">
+                        <div class="stat-pro pub" role="listitem">
+                            <span class="stat-number">${activeCount}</span>
+                            <span class="stat-label">Publicaciones</span>
+                        </div>
+                        <div class="stat-pro fav" role="listitem">
+                            <span class="stat-number">${favorites.length}</span>
+                            <span class="stat-label">Favoritos</span>
+                        </div>
+                        <div class="stat-pro sold" role="listitem">
+                            <span class="stat-number">${soldPublications.length}</span>
+                            <span class="stat-label">Ventas</span>
+                        </div>
+                    </div>
+                </header>
+                ${renderSellerStatusCard()}
+                <div class="profile-tabs" role="tablist">
+                    <button class="profile-tab" data-panel="own" role="tab" aria-selected="false">
+                        <i class="fa-solid fa-box-open"></i> Mis publicaciones
+                    </button>
+                    <button class="profile-tab" data-panel="fav" role="tab" aria-selected="false">
+                        <i class="fa-solid fa-bookmark"></i> Favoritos
+                    </button>
+                    <button class="profile-tab" data-panel="sold" role="tab" aria-selected="false">
+                        <i class="fa-solid fa-hand-holding-dollar"></i> Ventas
+                    </button>
+                </div>
+                <div class="profile-panel" id="panel-own">
+                    <div id="user-products-grid" class="products-grid"></div>
+                </div>
+                <div class="profile-panel" id="panel-fav">
+                    <div id="user-favorites-grid" class="products-grid"></div>
+                </div>
+                <div class="profile-panel" id="panel-sold">
+                    <div id="user-sold-grid" class="products-grid"></div>
+                </div>`;
+
+            renderOwnPublications(ownPublications);
+            renderFavoritePublications(favorites);
+            renderSoldPublications(soldPublications);
+            wireSellerCard();
+            applyTabState();
+
+            Logger.info('Perfil renderizado', { uid, hasProfile: true });
+
+        } catch (error) {
+            if (token !== renderToken) return;
+            Logger.error('Error cargando perfil', error);
+            profileContent.innerHTML = `
+                <header class="profile-header-pro">
+                    <div class="profile-header-row">
+                        <div class="profile-heading">
+                            <div class="title-row"><h2>Perfil</h2></div>
+                        </div>
+                    </div>
+                </header>
+                <div class="login-required">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <h3>No pudimos cargar tu perfil</h3>
+                    <p>Inténtalo de nuevo más tarde.</p>
+                    <button class="btn-primary" id="btn-profile-retry">Reintentar</button>
+                </div>`;
+            const btnRetry = document.getElementById('btn-profile-retry');
+            if (btnRetry) btnRetry.addEventListener('click', () => renderProfile());
+        }
     }
 
     /* -----------------------------------------------------
@@ -557,10 +578,9 @@
     }
 
     /* -----------------------------------------------------
-       DELEGACIÓN DE CLICK — UN SOLO LISTENER
+       DELEGACIÓN DE CLICK
        ----------------------------------------------------- */
     function handleProfileClick(e) {
-        /* Tabs */
         const tab = e.target.closest('.profile-tab');
         if (tab) {
             e.preventDefault();
@@ -574,7 +594,6 @@
             return;
         }
 
-        // Admin panel
         if (e.target.closest('#btn-open-admin')) {
             e.preventDefault();
             e.stopPropagation();
@@ -582,7 +601,6 @@
             return;
         }
 
-        // Settings
         if (e.target.closest('#btn-open-settings')) {
             e.preventDefault();
             e.stopPropagation();
@@ -590,7 +608,6 @@
             return;
         }
 
-        // Avatar
         if (e.target.closest('#btn-change-avatar')) {
             e.preventDefault();
             e.stopPropagation();
@@ -598,7 +615,6 @@
             return;
         }
 
-        // Edit publication
         const editBtn = e.target.closest('.btn-edit');
         if (editBtn) {
             e.stopPropagation();
@@ -607,7 +623,6 @@
             return;
         }
 
-        // Mark as sold
         const soldBtn = e.target.closest('.btn-sold');
         if (soldBtn) {
             e.stopPropagation();
@@ -616,7 +631,6 @@
             return;
         }
 
-        // Delete
         const delBtn = e.target.closest('.btn-delete');
         if (delBtn) {
             e.stopPropagation();
@@ -658,7 +672,7 @@
             const compressed = await ImageService.compressImage(file);
             const upload = await ImageService.uploadImageToCloudinary(compressed);
             await UserService.updateAvatar(AppState.currentUser.uid, upload.secure_url);
-            AppState.currentProfile.avatarUrl = upload.secure_url;
+            if (AppState.currentProfile) AppState.currentProfile.avatarUrl = upload.secure_url;
             renderProfile();
             Toast.success('Avatar actualizado.');
         } catch (error) {
@@ -680,15 +694,12 @@
             <div class="settings-group">
                 <span class="settings-group-title">Cuenta</span>
                 <div class="settings-group-card">
-
                     <div class="settings-row settings-username-row">
                         <div class="s-icon tone-coffee"><i class="fa-solid fa-at"></i></div>
-
                         <div class="s-text" id="username-display-wrap">
                             <span class="s-label">Username</span>
                             <span class="s-value" id="settings-username-value">@${Formatters.escapeHtml(profile.username || '')}</span>
                         </div>
-
                         <div class="s-text hidden" id="username-edit-wrap">
                             <span class="s-label">Nuevo username</span>
                             <div class="username-input-wrap">
@@ -698,14 +709,12 @@
                                        spellcheck="false" inputmode="text">
                             </div>
                         </div>
-
                         <div class="settings-row-buttons" id="username-row-buttons">
                             <button class="settings-row-action-btn" id="btn-edit-username"
                                     type="button" aria-label="Editar username" title="Editar username">
                                 <i class="fa-solid fa-pen"></i>
                             </button>
                         </div>
-
                         <div class="settings-row-buttons hidden" id="username-edit-buttons">
                             <button class="settings-row-action-btn" id="btn-cancel-username-edit"
                                     type="button" aria-label="Cancelar" title="Cancelar">
@@ -954,7 +963,7 @@
         clearTimeout(usernameDebounceTimer);
         usernameDebounceTimer = null;
         lastCheckedNormalized = '';
-        settingsModal.classList.add('hidden');
+        if (settingsModal) settingsModal.classList.add('hidden');
     }
 
     function isSettingsModalOpen() {
@@ -972,14 +981,20 @@
         settingsModal = document.getElementById('settings-modal');
         settingsClose = document.getElementById('settings-close');
 
-        // Delegación única en el contenedor (nunca se reemplaza).
+        if (!profileContent) {
+            Logger.error('No se encontró #profile-content');
+            return;
+        }
+
         profileContent.addEventListener('click', handleProfileClick);
 
-        avatarInput.addEventListener('change', handleAvatarChange);
-        settingsClose.addEventListener('click', closeSettings);
-        settingsModal.addEventListener('click', (e) => {
-            if (e.target === settingsModal) closeSettings();
-        });
+        if (avatarInput) avatarInput.addEventListener('change', handleAvatarChange);
+        if (settingsClose) settingsClose.addEventListener('click', closeSettings);
+        if (settingsModal) {
+            settingsModal.addEventListener('click', (e) => {
+                if (e.target === settingsModal) closeSettings();
+            });
+        }
     }
 
     window.ProfileUI = {

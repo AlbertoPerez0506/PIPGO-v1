@@ -9,6 +9,7 @@
     let heroIcon, heroTitle, heroSubtitle;
     let btnForgotPassword, btnBackToLogin, btnSubmitRecover;
     let loginEmailInput, loginPasswordInput;
+    let loginSubmitBtn, registerSubmitBtn;
     let registerUsernameInput, registerEmailInput, registerPasswordInput;
     let recoverEmailInput;
     let initialized = false;
@@ -34,35 +35,62 @@
         }
     }
 
-    function showError(message) {
-        authSuccess.classList.add('hidden');
-        authSuccess.textContent = '';
-        authError.innerHTML = message
-            ? `<i class="fa-solid fa-circle-exclamation"></i> ${escapeHtml(message)}`
-            : '';
-        authError.classList.toggle('hidden', !message);
-    }
-
-    function showSuccess(message) {
-        authError.classList.add('hidden');
-        authError.textContent = '';
-        authSuccess.innerHTML = message
-            ? `<i class="fa-solid fa-circle-check"></i> <span>${message}</span>`
-            : '';
-        authSuccess.classList.toggle('hidden', !message);
-    }
-
-    function clearMessages() {
-        authError.classList.add('hidden');
-        authError.textContent = '';
-        authSuccess.classList.add('hidden');
-        authSuccess.textContent = '';
-    }
-
     function escapeHtml(s) {
         const d = document.createElement('div');
         d.textContent = s == null ? '' : String(s);
         return d.innerHTML;
+    }
+
+    function showError(message) {
+        authSuccess.classList.add('hidden');
+        authSuccess.innerHTML = '';
+        authError.innerHTML = message
+            ? `<i class="fa-solid fa-circle-exclamation"></i> <span>${escapeHtml(message)}</span>`
+            : '';
+        authError.classList.toggle('hidden', !message);
+        if (message) {
+            setTimeout(() => {
+                try { authError.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+            }, 30);
+        }
+    }
+
+    function showSuccess(message) {
+        authError.classList.add('hidden');
+        authError.innerHTML = '';
+        authSuccess.innerHTML = message
+            ? `<i class="fa-solid fa-circle-check"></i> <span>${message}</span>`
+            : '';
+        authSuccess.classList.toggle('hidden', !message);
+        if (message) {
+            setTimeout(() => {
+                try { authSuccess.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+            }, 30);
+        }
+    }
+
+    function clearMessages() {
+        authError.classList.add('hidden');
+        authError.innerHTML = '';
+        authSuccess.classList.add('hidden');
+        authSuccess.innerHTML = '';
+    }
+
+    function setButtonLoading(btn, loading) {
+        if (!btn) return;
+        if (loading) {
+            if (!btn.dataset.originalHtml) {
+                btn.dataset.originalHtml = btn.innerHTML;
+            }
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando…';
+        } else {
+            btn.disabled = false;
+            if (btn.dataset.originalHtml) {
+                btn.innerHTML = btn.dataset.originalHtml;
+                delete btn.dataset.originalHtml;
+            }
+        }
     }
 
     /* ---------- Vistas ---------- */
@@ -114,40 +142,96 @@
         authModal.classList.add('hidden');
         document.body.style.overflow = '';
         clearMessages();
-        // Limpiar campos sensibles
         if (loginPasswordInput) loginPasswordInput.value = '';
         if (registerPasswordInput) registerPasswordInput.value = '';
+    }
+
+    /**
+     * Espera a que AppState.currentUser esté listo (el observer de
+     * auth en app.js lo setea). Timeout máximo.
+     */
+    function waitForAuthState(timeoutMs) {
+        return new Promise((resolve) => {
+            const start = Date.now();
+            const tick = () => {
+                if (AppState.currentUser) return resolve(true);
+                if (Date.now() - start >= timeoutMs) return resolve(false);
+                setTimeout(tick, 80);
+            };
+            tick();
+        });
     }
 
     /* ---------- Handlers ---------- */
     async function handleRegister(e) {
         e.preventDefault();
+        if (registerSubmitBtn && registerSubmitBtn.disabled) return;
+
         const username = registerUsernameInput.value;
         const email = registerEmailInput.value;
         const password = registerPasswordInput.value;
         clearMessages();
 
+        setButtonLoading(registerSubmitBtn, true);
+
         try {
             await AuthService.register({ username, email, password });
+            await waitForAuthState(2500);
             closeAuthModal();
             Toast.success('Cuenta creada correctamente.');
+
+            /* Red de seguridad: forzamos un render del perfil
+               por si el observer de Firebase llegó tarde o
+               se rompió algún eslabón intermedio. */
+            setTimeout(() => {
+                try {
+                    if (window.ProfileUI && ProfileUI.renderProfile) {
+                        ProfileUI.renderProfile();
+                    }
+                } catch (err) {
+                    Logger.error('renderProfile post-registro falló', err);
+                }
+            }, 150);
         } catch (error) {
             showError(error.message || 'No se pudo crear la cuenta.');
+        } finally {
+            setButtonLoading(registerSubmitBtn, false);
         }
     }
 
     async function handleLogin(e) {
         e.preventDefault();
+        if (loginSubmitBtn && loginSubmitBtn.disabled) return;
+
         const email = loginEmailInput.value;
         const password = loginPasswordInput.value;
         clearMessages();
 
+        setButtonLoading(loginSubmitBtn, true);
+
         try {
             await AuthService.login(email, password);
+            // Esperar al observer para que el perfil se cargue antes de cerrar.
+            await waitForAuthState(2500);
             closeAuthModal();
             Toast.success('Sesión iniciada.');
+
+            /* Red de seguridad: forzamos un render del perfil
+               por si el observer de Firebase llegó tarde o
+               se rompió algún eslabón intermedio. */
+            setTimeout(() => {
+                try {
+                    if (window.ProfileUI && ProfileUI.renderProfile) {
+                        ProfileUI.renderProfile();
+                    }
+                } catch (err) {
+                    Logger.error('renderProfile post-login falló', err);
+                }
+            }, 150);
         } catch (error) {
             showError(error.message || 'No se pudo iniciar sesión.');
+        } finally {
+            setButtonLoading(loginSubmitBtn, false);
         }
     }
 
@@ -160,9 +244,7 @@
             return;
         }
 
-        btnSubmitRecover.disabled = true;
-        const originalHTML = btnSubmitRecover.innerHTML;
-        btnSubmitRecover.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando…';
+        setButtonLoading(btnSubmitRecover, true);
 
         try {
             await AuthService.requestPasswordReset(email);
@@ -173,8 +255,7 @@
         } catch (error) {
             showError(error.message || 'No pudimos enviar la solicitud.');
         } finally {
-            btnSubmitRecover.disabled = false;
-            btnSubmitRecover.innerHTML = originalHTML;
+            setButtonLoading(btnSubmitRecover, false);
         }
     }
 
@@ -210,12 +291,15 @@
         heroTitle         = document.getElementById('auth-hero-title');
         heroSubtitle      = document.getElementById('auth-hero-subtitle');
 
-        loginEmailInput     = document.getElementById('login-email');
-        loginPasswordInput  = document.getElementById('login-password');
+        loginEmailInput       = document.getElementById('login-email');
+        loginPasswordInput    = document.getElementById('login-password');
         registerUsernameInput = document.getElementById('register-username');
         registerEmailInput    = document.getElementById('register-email');
         registerPasswordInput = document.getElementById('register-password');
         recoverEmailInput     = document.getElementById('recover-email');
+
+        loginSubmitBtn    = loginForm.querySelector('button[type="submit"]');
+        registerSubmitBtn = registerForm.querySelector('button[type="submit"]');
 
         btnForgotPassword = document.getElementById('btn-forgot-password');
         btnBackToLogin    = document.getElementById('btn-back-to-login');
@@ -237,10 +321,18 @@
         if (btnBackToLogin)    btnBackToLogin.addEventListener('click', showLoginView);
         if (btnSubmitRecover)  btnSubmitRecover.addEventListener('click', handleSubmitRecover);
 
-        // Toggle password visibility
         document.querySelectorAll('.auth-input-toggle').forEach(btn => {
             btn.addEventListener('click', () => handleTogglePassword(btn));
         });
+
+        if (recoverEmailInput) {
+            recoverEmailInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSubmitRecover();
+                }
+            });
+        }
     }
 
     window.AuthUI = {

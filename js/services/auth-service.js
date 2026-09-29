@@ -10,11 +10,13 @@ window.AuthService = {
         if (!Validators.validatePassword(password)) throw new Error('La contraseña debe tener al menos 6 caracteres.');
 
         const normalized = Validators.normalizeUsername(usernameValidation.value);
+        const cleanEmail = String(email).trim().toLowerCase();
 
         let credential;
         try {
-            credential = await auth.createUserWithEmailAndPassword(email, password);
+            credential = await auth.createUserWithEmailAndPassword(cleanEmail, password);
         } catch (error) {
+            Logger.error('Registro falló', error);
             throw new Error(this.getAuthErrorMessage(error));
         }
 
@@ -25,7 +27,7 @@ window.AuthService = {
                 uid,
                 username: usernameValidation.value,
                 normalized,
-                email
+                email: cleanEmail
             });
             return credential.user;
         } catch (error) {
@@ -40,9 +42,17 @@ window.AuthService = {
     },
 
     async login(email, password) {
+        const cleanEmail = String(email || '').trim().toLowerCase();
+        if (!cleanEmail || !password) {
+            throw new Error('Correo y contraseña son obligatorios.');
+        }
+
         try {
-            return await auth.signInWithEmailAndPassword(email, password);
+            const credential = await auth.signInWithEmailAndPassword(cleanEmail, password);
+            Logger.info('Login OK', { uid: credential.user.uid, email: credential.user.email });
+            return credential;
         } catch (error) {
+            Logger.error('Login falló', { code: error && error.code, message: error && error.message });
             throw new Error(this.getAuthErrorMessage(error));
         }
     },
@@ -54,12 +64,6 @@ window.AuthService = {
     /* -------------------------------------------------
        RECUPERACIÓN DE CONTRASEÑA
        ------------------------------------------------- */
-
-    /**
-     * El usuario pide recuperar contraseña. Se crea una
-     * solicitud en Firestore que el admin debe aprobar.
-     * No requiere estar autenticado.
-     */
     async requestPasswordReset(rawEmail) {
         const email = String(rawEmail || '').trim().toLowerCase();
         if (!Validators.validateEmail(email)) {
@@ -82,10 +86,6 @@ window.AuthService = {
         }
     },
 
-    /**
-     * Envía el correo estándar de Firebase para resetear
-     * contraseña. Lo invoca el admin al aprobar una solicitud.
-     */
     async sendPasswordResetEmail(email) {
         try {
             await auth.sendPasswordResetEmail(email);
@@ -105,9 +105,11 @@ window.AuthService = {
             'auth/user-not-found': 'No existe una cuenta con este correo.',
             'auth/wrong-password': 'Contraseña incorrecta.',
             'auth/invalid-credential': 'Correo o contraseña incorrectos.',
-            'auth/too-many-requests': 'Demasiados intentos. Espera un momento.',
+            'auth/invalid-login-credentials': 'Correo o contraseña incorrectos.',
+            'auth/user-disabled': 'Esta cuenta fue deshabilitada. Contacta al soporte.',
+            'auth/too-many-requests': 'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
             'auth/network-request-failed': 'No pudimos conectar. Revisa tu conexión a Internet.',
-            'auth/operation-not-allowed': 'El registro con correo no está habilitado.'
+            'auth/operation-not-allowed': 'El inicio de sesión con correo no está habilitado. Contacta al administrador.'
         };
         return map[code] || 'No pudimos completar la autenticación. Inténtalo de nuevo.';
     }
