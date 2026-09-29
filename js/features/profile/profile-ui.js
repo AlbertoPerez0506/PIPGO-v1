@@ -1,6 +1,14 @@
 /* =====================================================
    PIPGO · PROFILE UI
    Perfil + Ajustes + edición inline de username.
+
+   Reglas de la pestaña activa:
+   - Persiste dentro del perfil (mientras el usuario
+     navega, re-renders por avatar/username, etc.).
+   - Se resetea a "Mis publicaciones" cuando el usuario
+     entra al perfil viniendo de OTRA vista
+     (Home/Buscar/Publicar/Mensajes). Esto lo controla
+     NavigationUI llamando a ProfileUI.resetActiveTab().
    ===================================================== */
 
 (function () {
@@ -10,8 +18,12 @@
     let soldPublications = [];
     let initialized = false;
 
-    /* FIX: lock para evitar renders concurrentes. */
+    /* Lock contra renders concurrentes. */
     let renderLock = null;
+
+    /* Pestaña activa persistente dentro del perfil.
+       Valores: 'own' | 'fav' | 'sold'. */
+    let activeProfileTab = 'own';
 
     let settingsModal, settingsClose;
 
@@ -22,6 +34,32 @@
         usernameEditInput, usernameFeedback;
     let usernameDebounceTimer = null;
     let lastCheckedNormalized = '';
+
+    /* -----------------------------------------------------
+       TABS — aplicación de estado
+       ----------------------------------------------------- */
+    function applyTabState() {
+        const tabs = document.querySelectorAll('.profile-tab');
+        const panels = document.querySelectorAll('.profile-panel');
+        if (!tabs.length) return;
+
+        tabs.forEach(tab => {
+            const isActive = (tab.dataset.panel || 'own') === activeProfileTab;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        panels.forEach(p => {
+            const isActive = p.id === `panel-${activeProfileTab}`;
+            p.classList.toggle('active', isActive);
+        });
+    }
+
+    /* Reset explícito. Invocado por NavigationUI al entrar
+       al perfil desde otra vista. */
+    function resetActiveTab() {
+        activeProfileTab = 'own';
+    }
 
     /* -----------------------------------------------------
        LOGIN PROMPT
@@ -138,10 +176,6 @@
 
     /* -----------------------------------------------------
        RENDER PRINCIPAL
-       FIX: protegido con lock contra re-renders concurrentes.
-       FIX: no destruye el contenido existente si ya hay perfil
-            renderizado (evita el placeholder "Cargando…" que
-            capturaba los taps).
        ----------------------------------------------------- */
     async function renderProfile() {
         if (renderLock) return renderLock;
@@ -155,9 +189,6 @@
 
                 const uid = AppState.currentUser.uid;
 
-                // Solo mostrar "Cargando…" si NO hay contenido todavía.
-                // Si ya renderizamos, mantenemos el contenido visible
-                // y actualizamos en cuanto llegan los datos.
                 const hasContent = !!profileContent.querySelector('.profile-header-pro');
                 if (!hasContent) {
                     profileContent.innerHTML = `
@@ -207,6 +238,9 @@
                            </button>`
                         : '';
 
+                    /* La clase "active" en tabs y paneles NO se
+                       hardcodea aquí. Se aplica después con
+                       applyTabState() para respetar activeProfileTab. */
                     profileContent.innerHTML = `
                         <header class="profile-header-pro">
                             <div class="profile-header-row">
@@ -244,17 +278,17 @@
                         </header>
                         ${renderSellerStatusCard()}
                         <div class="profile-tabs" role="tablist">
-                            <button class="profile-tab active" data-panel="own" role="tab">
+                            <button class="profile-tab" data-panel="own" role="tab" aria-selected="false">
                                 <i class="fa-solid fa-box-open"></i> Mis publicaciones
                             </button>
-                            <button class="profile-tab" data-panel="fav" role="tab">
+                            <button class="profile-tab" data-panel="fav" role="tab" aria-selected="false">
                                 <i class="fa-solid fa-bookmark"></i> Favoritos
                             </button>
-                            <button class="profile-tab" data-panel="sold" role="tab">
+                            <button class="profile-tab" data-panel="sold" role="tab" aria-selected="false">
                                 <i class="fa-solid fa-hand-holding-dollar"></i> Ventas
                             </button>
                         </div>
-                        <div class="profile-panel active" id="panel-own">
+                        <div class="profile-panel" id="panel-own">
                             <div id="user-products-grid" class="products-grid"></div>
                         </div>
                         <div class="profile-panel" id="panel-fav">
@@ -269,21 +303,8 @@
                     renderSoldPublications(soldPublications);
                     wireSellerCard();
 
-                    // FIX: Ya no se agregan listeners directos a
-                    // admin/settings/avatar aquí. Se manejan por
-                    // delegación en handleProfileClick sobre
-                    // #profile-content (que nunca se reemplaza).
-
-                    document.querySelectorAll('.profile-tab').forEach(tab => {
-                        tab.addEventListener('click', () => {
-                            document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-                            document.querySelectorAll('.profile-panel').forEach(p => p.classList.remove('active'));
-                            tab.classList.add('active');
-                            const panelMap = { own: 'panel-own', fav: 'panel-fav', sold: 'panel-sold' };
-                            const panelId = panelMap[tab.dataset.panel];
-                            if (panelId) document.getElementById(panelId).classList.add('active');
-                        });
-                    });
+                    /* Aplicar el estado de pestaña activa. */
+                    applyTabState();
 
                 } catch (error) {
                     Logger.error('Error cargando perfil', error);
@@ -487,12 +508,23 @@
     }
 
     /* -----------------------------------------------------
-       ACCIONES DE CARD + DELEGACIÓN
-       FIX: ahora también maneja admin, ajustes y avatar
-            por delegación. Los listeners directos se perdían
-            entre re-renders.
+       DELEGACIÓN DE CLICK — UN SOLO LISTENER
        ----------------------------------------------------- */
     function handleProfileClick(e) {
+        /* Tabs */
+        const tab = e.target.closest('.profile-tab');
+        if (tab) {
+            e.preventDefault();
+            e.stopPropagation();
+            const panel = tab.dataset.panel || 'own';
+            if (panel !== activeProfileTab) {
+                activeProfileTab = panel;
+                applyTabState();
+                if (window.HapticsService) HapticsService.light();
+            }
+            return;
+        }
+
         // Admin panel
         if (e.target.closest('#btn-open-admin')) {
             e.preventDefault();
@@ -893,6 +925,7 @@
 
         // Delegación única en el contenedor (nunca se reemplaza).
         profileContent.addEventListener('click', handleProfileClick);
+
         avatarInput.addEventListener('change', handleAvatarChange);
         settingsClose.addEventListener('click', closeSettings);
         settingsModal.addEventListener('click', (e) => {
@@ -905,6 +938,7 @@
         renderProfile,
         openSettings,
         closeSettings,
-        isSettingsModalOpen
+        isSettingsModalOpen,
+        resetActiveTab
     };
 })();

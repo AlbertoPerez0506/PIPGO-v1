@@ -6,10 +6,8 @@
     function switchView(viewName, { push = false, force = false } = {}) {
         const isSameView = viewName === AppState.currentView;
 
-        // FIX: si el usuario toca la pestaña donde ya está,
+        // Si el usuario toca la pestaña donde ya está,
         // solo hacemos scroll al top y NO re-renderizamos.
-        // Antes se disparaba una re-renderización que podía
-        // destruir listeners de botones (admin, ajustes, etc).
         if (isSameView && push && !force) {
             mainContent.scrollTo({ top: 0, behavior: 'smooth' });
             return;
@@ -55,7 +53,20 @@
         }
 
         if (viewName === 'anunciarme') PublicationUI.updateAuthUI();
-        if (viewName === 'perfil') ProfileUI.renderProfile();
+
+        if (viewName === 'perfil') {
+            /* FIX: si entramos al perfil viniendo de OTRA vista,
+               reseteamos la pestaña activa a "Mis publicaciones".
+               Si ya estábamos en perfil (re-render interno por
+               avatar, username, etc.), conservamos la pestaña. */
+            if (previousView !== 'perfil' &&
+                window.ProfileUI &&
+                ProfileUI.resetActiveTab) {
+                ProfileUI.resetActiveTab();
+            }
+            ProfileUI.renderProfile();
+        }
+
         if (viewName === 'search') PublicationUI.onEnterSearch();
         if (viewName === 'admin' && window.AdminUI) AdminUI.onEnterAdmin();
 
