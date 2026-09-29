@@ -14,23 +14,24 @@
         return t.content.firstElementChild;
     }
 
-    function open() {
+    async function open() {
         if (!AppState.currentUser) {
             AppState.pendingAction = { type: 'openSellerForm' };
             AuthUI.openAuthModal('login');
             return;
         }
-        renderByState();
+        await renderByState();
         modal.classList.remove('hidden');
     }
 
     function close() { modal.classList.add('hidden'); }
 
     /* ---------------- estados ---------------- */
-    function renderByState() {
+    async function renderByState() {
         const s = PermissionService.getSellerStatus();
         if (s === 'pending')        return renderPending();
-        if (s === 'rejected')       return renderForm({ rejected: true });
+        if (s === 'needs_info')     return await renderForm({ needsInfo: true });
+        if (s === 'rejected')       return await renderForm({ rejected: true });
         if (s === 'suspended')      return renderSuspended();
         if (s === 'approved')       return renderApproved();
         return renderIntro();
@@ -58,22 +59,51 @@
             .addEventListener('click', () => renderForm());
     }
 
-    function renderForm({ rejected = false, application = null } = {}) {
-        titleEl.textContent = rejected ? 'Corregir solicitud' : 'Solicitud de vendedor';
+    async function renderForm({ rejected = false, needsInfo = false, application = null } = {}) {
+        titleEl.textContent = rejected ? 'Corregir solicitud'
+                            : needsInfo ? 'Completar información'
+                            : 'Solicitud de vendedor';
 
-        const a = application || {};
+        // Cargar solicitud existente si no vino por parámetro
+        let a = application;
+        if (!a) {
+            try {
+                a = await SellerService.getApplication(AppState.currentUser.uid) || {};
+            } catch (e) {
+                a = {};
+            }
+        }
+
         const type = a.sellerType || 'person';
         const contact = a.contactMethod || 'phone';
 
-        bodyEl.innerHTML = `
-            ${rejected ? `
+        let bannerHtml = '';
+        if (rejected) {
+            bannerHtml = `
                 <div class="seller-rejected">
                     <i class="fa-solid fa-circle-exclamation"></i>
                     <div>
                         <strong>Solicitud no aprobada</strong>
-                        <p>Corrige la información y vuelve a enviarla.</p>
+                        ${a.rejectionReason
+                            ? `<p>${Formatters.escapeHtml(a.rejectionReason)}</p>`
+                            : `<p>Corrige la información y vuelve a enviarla.</p>`}
                     </div>
-                </div>` : ''}
+                </div>`;
+        } else if (needsInfo) {
+            bannerHtml = `
+                <div class="seller-rejected" style="background: var(--star-light); color: #92400E;">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <div>
+                        <strong>Información solicitada por administración</strong>
+                        ${a.adminNote
+                            ? `<p>${Formatters.escapeHtml(a.adminNote)}</p>`
+                            : `<p>Corrige o completa tu información y vuelve a enviarla.</p>`}
+                    </div>
+                </div>`;
+        }
+
+        bodyEl.innerHTML = `
+            ${bannerHtml}
 
             <div class="seller-form">
                 <div class="input-group">
@@ -148,7 +178,7 @@
                 <div class="form-error hidden" id="seller-error"></div>
 
                 <button class="btn-primary btn-large" id="seller-submit">
-                    <i class="fa-solid fa-paper-plane"></i> Enviar solicitud
+                    <i class="fa-solid fa-paper-plane"></i> ${needsInfo || rejected ? 'Reenviar solicitud' : 'Enviar solicitud'}
                 </button>
             </div>`;
 
@@ -216,6 +246,7 @@
             Toast.success('Solicitud enviada. Te avisaremos pronto.');
             close();
             if (AppState.currentView === 'perfil') ProfileUI.renderProfile();
+            if (AppState.currentView === 'anunciarme') PublicationUI.updateAuthUI();
         } catch (error) {
             const msg = ErrorHandler.toUserMessage(error, { context: 'seller.submit' });
             showErr(msg);
@@ -282,6 +313,6 @@
         init,
         open,
         close,
-        openApplicationForm: () => { open(); renderForm(); }
+        openApplicationForm: () => { open(); }
     };
 })();

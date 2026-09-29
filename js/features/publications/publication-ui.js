@@ -87,7 +87,7 @@
         }
     }
 
-    function renderLoginRequiredState() {
+        function renderLoginRequiredState() {
         const container = document.getElementById('login-required');
         if (!container) return;
 
@@ -112,6 +112,17 @@
                 <p>Tu solicitud para vender en PipGo está siendo revisada.</p>
                 <button class="btn-primary" id="btn-seller-view">Ver solicitud</button>`;
             const b = document.getElementById('btn-seller-view');
+            if (b) b.addEventListener('click', () => SellerUI.open());
+            return;
+        }
+
+        if (status === 'needs_info') {
+            container.innerHTML = `
+                <i class="fa-solid fa-circle-info" style="color:var(--primary);"></i>
+                <h3>Información requerida</h3>
+                <p>La administración solicitó información adicional. Revisa tu solicitud para continuar.</p>
+                <button class="btn-primary" id="btn-seller-fix-info">Revisar solicitud</button>`;
+            const b = document.getElementById('btn-seller-fix-info');
             if (b) b.addEventListener('click', () => SellerUI.open());
             return;
         }

@@ -11,6 +11,7 @@
         PublicationUI.init();
         FavoriteUI.init();
         SellerUI.init();
+        AdminUI.init();          // ← NUEVO
     }
 
     function getTimeGreeting() {
@@ -33,9 +34,6 @@
         }
     }
 
-    /* =====================================================
-       UBICACIÓN DEL HEADER
-       ===================================================== */
     function updateLocationChip(cityName) {
         const textEl = document.getElementById('location-text');
         if (!textEl) return;
@@ -83,9 +81,6 @@
         setTimeout(detectAndUpdateCity, 800);
     }
 
-    /* =====================================================
-       SCROLL INTELIGENTE DEL HEADER
-       ===================================================== */
     function initHomeHeaderScroll() {
         const main = document.getElementById('main-content');
         const header = document.getElementById('home-header');
@@ -133,9 +128,6 @@
         window.PipGoHomeHeader = { reset };
     }
 
-    /* =====================================================
-       JUST-IN-TIME AUTH · Ejecutar acción pendiente
-       ===================================================== */
     function runPendingAction() {
         const action = AppState.pendingAction;
         AppState.pendingAction = null;
@@ -154,9 +146,6 @@
         }
     }
 
-    /* =====================================================
-       OBSERVER DE AUTH
-       ===================================================== */
     function initializeAuthObserver() {
         AuthService.onAuthStateChanged(async (user) => {
             AppState.currentUser = user;
@@ -185,9 +174,6 @@
         });
     }
 
-    /* =====================================================
-       BOOTSTRAP
-       ===================================================== */
     async function bootstrap() {
         try {
             initializeFeatures();

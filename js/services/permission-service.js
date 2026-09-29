@@ -30,12 +30,13 @@
         },
 
         /* ---------- Estado del vendedor ---------- */
-        isSeller()          { return this.getRole() === 'seller'; },
-        isSellerNone()      { return this.getSellerStatus() === 'none'; },
-        isSellerPending()   { return this.getSellerStatus() === 'pending'; },
-        isSellerApproved()  { return this.isSeller() && this.getSellerStatus() === 'approved'; },
-        isSellerRejected()  { return this.getSellerStatus() === 'rejected'; },
-        isSellerSuspended() { return this.getSellerStatus() === 'suspended'; },
+        isSeller()           { return this.getRole() === 'seller'; },
+        isSellerNone()       { return this.getSellerStatus() === 'none'; },
+        isSellerPending()    { return this.getSellerStatus() === 'pending'; },
+        isSellerApproved()   { return this.isSeller() && this.getSellerStatus() === 'approved'; },
+        isSellerRejected()   { return this.getSellerStatus() === 'rejected'; },
+        isSellerNeedsInfo()  { return this.getSellerStatus() === 'needs_info'; },
+        isSellerSuspended()  { return this.getSellerStatus() === 'suspended'; },
 
         /* ---------- Capacidades ---------- */
         canViewPublications() { return true; },
@@ -44,7 +45,7 @@
         canRequestSeller() {
             if (!this.isAuthenticated()) return false;
             const s = this.getSellerStatus();
-            return s === 'none' || s === 'rejected';
+            return s === 'none' || s === 'rejected' || s === 'needs_info';
         },
         canPublish() {
             return this.isAuthenticated()
@@ -64,9 +65,10 @@
         /* ---------- Mensaje humano para acciones bloqueadas ---------- */
         reasonCannotPublish() {
             if (!this.isAuthenticated()) return 'Inicia sesión para publicar.';
-            if (this.isSellerPending())  return 'Tu solicitud de vendedor está en revisión.';
-            if (this.isSellerRejected()) return 'Tu solicitud de vendedor no fue aprobada. Corrígela para volver a intentarlo.';
-            if (this.isSellerSuspended())return 'Tu cuenta de vendedor está suspendida temporalmente.';
+            if (this.isSellerPending())   return 'Tu solicitud de vendedor está en revisión.';
+            if (this.isSellerNeedsInfo()) return 'La administración solicitó información adicional. Revisa tu solicitud para continuar.';
+            if (this.isSellerRejected())  return 'Tu solicitud de vendedor no fue aprobada. Corrígela para volver a intentarlo.';
+            if (this.isSellerSuspended()) return 'Tu cuenta de vendedor está suspendida temporalmente.';
             return 'Necesitas ser vendedor aprobado para publicar.';
         }
     };

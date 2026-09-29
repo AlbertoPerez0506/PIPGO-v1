@@ -25,6 +25,7 @@ window.SellerService = {
             termsAccepted: true,
             status:        'pending',
             rejectionReason: null,
+            adminNote:     null,
             submittedAt:   now,
             updatedAt:     now,
             reviewedAt:    null,
@@ -33,8 +34,9 @@ window.SellerService = {
 
         const batch = db.batch();
         batch.set(
-            db.collection('solicitudesVendedor').doc(uid),
-            payload
+            db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS).doc(uid),
+            payload,
+            { merge: true }
         );
         batch.update(
             db.collection(CONFIG.COLLECTIONS.USERS).doc(uid),
@@ -51,13 +53,13 @@ window.SellerService = {
     },
 
     async getApplication(uid) {
-        const snap = await db.collection('solicitudesVendedor').doc(uid).get();
+        const snap = await db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS).doc(uid).get();
         return snap.exists ? snap.data() : null;
     },
 
-    /* Vista previa para admin (no implementada UI todavía) */
+    /* Vista previa para admin */
     async listPending() {
-        const snap = await db.collection('solicitudesVendedor')
+        const snap = await db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS)
             .where('status', '==', 'pending')
             .orderBy('submittedAt', 'desc')
             .limit(50)

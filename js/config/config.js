@@ -6,6 +6,12 @@ window.CONFIG = {
     appName: 'PipGo',
 
     // =============================================
+    // ADMINISTRADOR ÚNICO
+    // Se valida también en Firestore Rules.
+    // =============================================
+    ADMIN_EMAIL: 'ivanalbertoperezramirez@gmail.com',
+
+    // =============================================
     // CLOUDINARY (Unsigned upload)
     // =============================================
     CLOUDINARY_CLOUD_NAME: 'tugqycpq',
@@ -23,6 +29,7 @@ window.CONFIG = {
         USERS: 'usuarios',
         USERNAMES: 'usernames',
         PUBLICATIONS: 'publicaciones',
-        FAVORITES: 'favoritos'
+        FAVORITES: 'favoritos',
+        SELLER_APPLICATIONS: 'solicitudesVendedor'
     }
 };

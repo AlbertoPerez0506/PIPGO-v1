@@ -335,6 +335,31 @@
                 <div id="profile-content"></div>
             </section>
 
+            <!-- ============ VISTA: ADMIN ============ -->
+            <section id="view-admin" class="view">
+                <header class="admin-header">
+                    <button class="admin-back" id="admin-back" aria-label="Volver">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <div class="admin-header-text">
+                        <h2>Panel Admin</h2>
+                        <p id="admin-hello">Hola, admin</p>
+                    </div>
+                </header>
+
+                <div class="admin-tabs" role="tablist">
+                    <button class="admin-tab active" data-admin-tab="dashboard">Dashboard</button>
+                    <button class="admin-tab" data-admin-tab="applications">Solicitudes</button>
+                    <button class="admin-tab" data-admin-tab="users">Usuarios</button>
+                </div>
+
+                <div class="admin-panels">
+                    <div class="admin-panel active" id="admin-panel-dashboard"></div>
+                    <div class="admin-panel" id="admin-panel-applications"></div>
+                    <div class="admin-panel" id="admin-panel-users"></div>
+                </div>
+            </section>
+
         </main>
 
         <!-- ============ SHEET DE PRODUCTO ============ -->
@@ -512,6 +537,26 @@
             </div>
         </div>
 
+        <!-- ============ MODAL CONFIRM ADMIN ============ -->
+        <div id="admin-confirm-modal" class="modal-backdrop hidden">
+            <div class="auth-modal admin-confirm-modal">
+                <div class="auth-header">
+                    <h3 id="admin-confirm-title">Confirmar</h3>
+                    <button class="modal-close" id="admin-confirm-close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <p id="admin-confirm-text"></p>
+                <div class="input-group hidden" id="admin-confirm-input-wrap">
+                    <label id="admin-confirm-input-label"></label>
+                    <textarea id="admin-confirm-input" rows="3" maxlength="500"></textarea>
+                </div>
+                <div class="form-error hidden" id="admin-confirm-error"></div>
+                <div class="admin-confirm-actions">
+                    <button class="btn-outline" id="admin-confirm-cancel">Cancelar</button>
+                    <button class="btn-primary" id="admin-confirm-ok">Confirmar</button>
+                </div>
+            </div>
+        </div>
+
         <!-- ============ NAVBAR ============ -->
         <nav class="bottom-nav" aria-label="Navegación principal">
             <button class="nav-item active" data-view="home" aria-label="Inicio">
@@ -561,6 +606,7 @@
 <script src="js/services/seller-service.js"></script>
 <script src="js/services/image-service.js"></script>
 <script src="js/services/location-service.js"></script>
+<script src="js/services/admin-service.js"></script>
 
 <script src="js/components/toast.js"></script>
 <script src="js/components/splash.js"></script>
@@ -570,6 +616,7 @@
 <script src="js/features/publications/publication-ui.js"></script>
 <script src="js/features/favorites/favorite-ui.js"></script>
 <script src="js/features/seller/seller-ui.js"></script>
+<script src="js/features/admin/admin-ui.js"></script>
 
 <script src="js/app.js"></script>
 </body>

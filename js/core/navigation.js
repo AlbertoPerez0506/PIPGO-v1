@@ -25,6 +25,7 @@
         if (viewName === 'anunciarme') PublicationUI.updateAuthUI();
         if (viewName === 'perfil') ProfileUI.renderProfile();
         if (viewName === 'search') PublicationUI.onEnterSearch();
+        if (viewName === 'admin' && window.AdminUI) AdminUI.onEnterAdmin();
 
         if (push) {
             const last = navigationStack[navigationStack.length - 1];
@@ -63,6 +64,17 @@
             ProfileUI.closeSettings();
             return true;
         }
+        if (window.AdminUI && AdminUI.isConfirmModalOpen && AdminUI.isConfirmModalOpen()) {
+            AdminUI.closeConfirm();
+            return true;
+        }
+        if (window.SellerUI) {
+            const sellerModal = document.getElementById('seller-modal');
+            if (sellerModal && !sellerModal.classList.contains('hidden')) {
+                SellerUI.close();
+                return true;
+            }
+        }
         return false;
     }
 
@@ -99,6 +111,10 @@
         }
         if (PublicationUI.isProductSheetOpen && PublicationUI.isProductSheetOpen()) {
             PublicationUI.closeProductSheet(false);
+            return;
+        }
+        if (window.AdminUI && AdminUI.isConfirmModalOpen && AdminUI.isConfirmModalOpen()) {
+            AdminUI.closeConfirm();
             return;
         }
 

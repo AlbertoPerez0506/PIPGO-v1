@@ -51,6 +51,19 @@
                     </button>
                 </div>`;
         }
+        if (s === 'needs_info') {
+            return `
+                <div class="seller-status-card state-needs-info" id="seller-status-card">
+                    <div class="seller-status-card-icon"><i class="fa-solid fa-circle-info"></i></div>
+                    <div class="seller-status-card-text">
+                        <h4>Información requerida</h4>
+                        <p>La administración solicitó información adicional.</p>
+                    </div>
+                    <button class="seller-action-btn" id="btn-seller-status-action">
+                        Revisar
+                    </button>
+                </div>`;
+        }
         if (s === 'rejected') {
             return `
                 <div class="seller-status-card state-rejected" id="seller-status-card">
@@ -164,12 +177,20 @@
                 ? `<img src="${Formatters.safeUrl(profile.avatarUrl)}" alt="Avatar">`
                 : `<i class="fa-solid fa-user profile-avatar-fallback-icon"></i>`;
 
+            const isAdmin = window.AdminService && AdminService.isAdmin();
+            const adminButtonHtml = isAdmin
+                ? `<button class="profile-settings-btn profile-admin-btn" id="btn-open-admin" aria-label="Administración">
+                       <i class="fa-solid fa-shield-halved"></i>
+                   </button>`
+                : '';
+
             profileContent.innerHTML = `
                 <header class="profile-header-pro">
                     <div class="profile-header-row">
                         <div class="profile-heading">
                             <div class="title-row">
                                 <h2>Perfil</h2>
+                                ${adminButtonHtml}
                                 <button class="profile-settings-btn" id="btn-open-settings" aria-label="Ajustes">
                                     <i class="fa-solid fa-gear"></i>
                                 </button>
@@ -233,6 +254,11 @@
 
             document.getElementById('btn-change-avatar').addEventListener('click', () => avatarInput.click());
             document.getElementById('btn-open-settings').addEventListener('click', () => openSettings(profile));
+
+            const adminBtn = document.getElementById('btn-open-admin');
+            if (adminBtn) {
+                adminBtn.addEventListener('click', () => NavigationUI.switchView('admin'));
+            }
 
             document.querySelectorAll('.profile-tab').forEach(tab => {
                 tab.addEventListener('click', () => {
