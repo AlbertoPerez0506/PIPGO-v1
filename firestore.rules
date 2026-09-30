@@ -4,24 +4,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ============================================================
-    // HELPERS DE IDENTIDAD
+    // HELPERS
     // ============================================================
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(uid) {
-      return signedIn() && request.auth.uid == uid;
-    }
-
-    // Admin único validado por email.
-    // Coincide con CONFIG.ADMIN_EMAIL en js/config/config.js
-    // y con AdminService.ADMIN_EMAIL en js/services/admin-service.js
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
     function isAdmin() {
       return signedIn()
         && request.auth.token.email == 'ivanalbertoperezramirez@gmail.com';
     }
-
     function isApprovedSeller(uid) {
       return signedIn()
         && request.auth.uid == uid
@@ -29,28 +19,23 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/usuarios/$(uid)).data.role == "seller"
         && get(/databases/$(database)/documents/usuarios/$(uid)).data.sellerStatus == "approved";
     }
-
     function validUsername(u) {
-      return u is string
-        && u.size() >= 3
-        && u.size() <= 20
+      return u is string && u.size() >= 3 && u.size() <= 20
         && u.matches('^[a-zA-Z0-9._]+$');
     }
-
     function usernameNormalizedMatches(u, n) {
-      return n is string
-        && n.size() >= 3
-        && n.size() <= 20
-        && n == u.lower();
+      return n is string && n.size() >= 3 && n.size() <= 20 && n == u.lower();
+    }
+    function validEmail(e) {
+      return e is string && e.size() >= 5 && e.size() <= 200
+        && e.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
     }
 
     // ============================================================
     // USUARIOS
     // ============================================================
     match /usuarios/{uid} {
-
       allow read: if isOwner(uid) || isAdmin();
-
       allow create: if isOwner(uid)
         && request.resource.data.uid == uid
         && request.resource.data.role == "user"
@@ -58,15 +43,11 @@ service cloud.firestore {
         && request.resource.data.active == true
         && request.resource.data.admin == false
         && validUsername(request.resource.data.username)
-        && usernameNormalizedMatches(
-             request.resource.data.username,
-             request.resource.data.usernameNormalized
-           )
+        && usernameNormalizedMatches(request.resource.data.username, request.resource.data.usernameNormalized)
         && request.resource.data.email is string
         && request.resource.data.avatarUrl is string
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp;
-
       allow update: if isAdmin()
         || (
           isOwner(uid)
@@ -77,22 +58,15 @@ service cloud.firestore {
           && request.resource.data.admin == resource.data.admin
           && request.resource.data.createdAt == resource.data.createdAt
           && validUsername(request.resource.data.username)
-          && usernameNormalizedMatches(
-               request.resource.data.username,
-               request.resource.data.usernameNormalized
-             )
+          && usernameNormalizedMatches(request.resource.data.username, request.resource.data.usernameNormalized)
           && (
             request.resource.data.sellerStatus == resource.data.sellerStatus
             || (resource.data.sellerStatus in ["none","rejected","needs_info"]
                 && request.resource.data.sellerStatus == "pending")
           )
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly([
-                 "avatarUrl","updatedAt","sellerStatus",
-                 "username","usernameNormalized"
-               ])
+               .hasOnly(["avatarUrl","updatedAt","sellerStatus","username","usernameNormalized"])
         );
-
       allow delete: if false;
     }
 
@@ -100,51 +74,36 @@ service cloud.firestore {
     // PERFILES PÚBLICOS
     // ============================================================
     match /perfilesPublicos/{uid} {
-
       allow read: if true;
-
       allow create: if isOwner(uid)
         && request.resource.data.uid == uid
         && validUsername(request.resource.data.username)
-        && usernameNormalizedMatches(
-             request.resource.data.username,
-             request.resource.data.usernameNormalized
-           )
+        && usernameNormalizedMatches(request.resource.data.username, request.resource.data.usernameNormalized)
         && request.resource.data.avatarUrl is string;
-
       allow update: if isAdmin()
         || (
           isOwner(uid)
           && request.resource.data.uid == resource.data.uid
           && validUsername(request.resource.data.username)
-          && usernameNormalizedMatches(
-               request.resource.data.username,
-               request.resource.data.usernameNormalized
-             )
+          && usernameNormalizedMatches(request.resource.data.username, request.resource.data.usernameNormalized)
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(["avatarUrl","username","usernameNormalized"])
         );
-
       allow delete: if false;
     }
 
     // ============================================================
-    // USERNAMES (índice de unicidad)
+    // USERNAMES
     // ============================================================
     match /usernames/{normalized} {
-
       allow read: if true;
-
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.uid is string
         && validUsername(request.resource.data.username)
         && request.resource.data.createdAt is timestamp;
-
       allow update: if false;
-
-      allow delete: if signedIn()
-        && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     // ============================================================
@@ -152,12 +111,10 @@ service cloud.firestore {
     // ============================================================
     match /usuarios/{uid}/favoritos/{publicationId} {
       allow read: if isOwner(uid);
-
       allow create: if isOwner(uid)
         && request.resource.data.publicationId == publicationId
         && request.resource.data.createdAt is timestamp
         && exists(/databases/$(database)/documents/publicaciones/$(publicationId));
-
       allow update: if false;
       allow delete: if isOwner(uid);
     }
@@ -166,9 +123,7 @@ service cloud.firestore {
     // SOLICITUDES DE VENDEDOR
     // ============================================================
     match /solicitudesVendedor/{uid} {
-
       allow read: if isOwner(uid) || isAdmin();
-
       allow create: if isOwner(uid)
         && request.resource.data.uid == uid
         && request.resource.data.status == "pending"
@@ -193,7 +148,6 @@ service cloud.firestore {
         && request.resource.data.reviewedAt == null
         && request.resource.data.reviewedBy == null
         && request.resource.data.rejectionReason == null;
-
       allow update: if isAdmin()
         || (
           isOwner(uid)
@@ -230,7 +184,6 @@ service cloud.firestore {
                  "reviewedAt","reviewedBy","rejectionReason","adminNote"
                ])
         );
-
       allow delete: if false;
     }
 
@@ -238,7 +191,6 @@ service cloud.firestore {
     // PUBLICACIONES
     // ============================================================
     match /publicaciones/{publicationId} {
-
       allow read: if
         resource.data.status == "active"
         || (signedIn() && resource.data.userId == request.auth.uid)
@@ -247,7 +199,6 @@ service cloud.firestore {
           && resource.data.status == "sold"
           && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)/favoritos/$(publicationId))
         );
-
       allow create: if isApprovedSeller(request.auth.uid)
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.status == "active"
@@ -262,40 +213,62 @@ service cloud.firestore {
         && request.resource.data.images is list
         && request.resource.data.storeName is string
         && request.resource.data.phone is string
-        && (!('hasWhatsapp' in request.resource.data)
-            || request.resource.data.hasWhatsapp is bool)
-        && (!('unitCode' in request.resource.data)
-            || request.resource.data.unitCode is string)
-        && (!('condition' in request.resource.data)
-            || request.resource.data.condition is string)
+        && (!('hasWhatsapp' in request.resource.data) || request.resource.data.hasWhatsapp is bool)
+        && (!('unitCode' in request.resource.data) || request.resource.data.unitCode is string)
+        && (!('condition' in request.resource.data) || request.resource.data.condition is string)
         && (!('presentation' in request.resource.data)
             || request.resource.data.presentation == null
             || request.resource.data.presentation is map)
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.soldAt == null;
-
       allow update: if isApprovedSeller(resource.data.userId)
         && request.auth.uid == resource.data.userId
         && request.resource.data.userId == resource.data.userId
         && request.resource.data.createdAt == resource.data.createdAt
-        && (!('hasWhatsapp' in request.resource.data)
-            || request.resource.data.hasWhatsapp is bool)
+        && (!('hasWhatsapp' in request.resource.data) || request.resource.data.hasWhatsapp is bool)
         && (
-          (resource.data.status == "active"
-            && request.resource.data.status in ["active", "sold", "deleted"])
-          || (resource.data.status == "sold"
-            && request.resource.data.status == "deleted")
-          || (resource.data.status == "deleted"
-            && request.resource.data.status == "deleted")
+          (resource.data.status == "active" && request.resource.data.status in ["active", "sold", "deleted"])
+          || (resource.data.status == "sold" && request.resource.data.status == "deleted")
+          || (resource.data.status == "deleted" && request.resource.data.status == "deleted")
         )
         && (
-          (request.resource.data.status == "sold"
-            && request.resource.data.soldAt is timestamp)
-          || (request.resource.data.status == "active"
-            && request.resource.data.soldAt == null)
+          (request.resource.data.status == "sold" && request.resource.data.soldAt is timestamp)
+          || (request.resource.data.status == "active" && request.resource.data.soldAt == null)
           || (request.resource.data.status == "deleted")
         );
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // SOLICITUDES DE RECUPERACIÓN DE CONTRASEÑA
+    // El usuario crea (sin auth). El admin lee y actualiza.
+    // El usuario NO puede leer ni actualizar sus propias
+    // solicitudes (evita filtración de correos).
+    // ============================================================
+    match /solicitudesRecuperacion/{docId} {
+
+      // Crear: cualquiera (usuario no autenticado)
+      allow create: if
+        request.resource.data.email is string
+        && validEmail(request.resource.data.email)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.requestedAt is timestamp
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.emailSentAt == null
+        && request.resource.data.rejectionReason == null;
+
+      // Leer: solo admin
+      allow read: if isAdmin();
+
+      // Actualizar: solo admin (aprobar / rechazar)
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly([
+               'status','reviewedAt','reviewedBy',
+               'emailSentAt','rejectionReason'
+             ]);
 
       allow delete: if false;
     }
@@ -304,10 +277,7 @@ service cloud.firestore {
     // CONVERSACIONES (V2)
     // ============================================================
     match /conversaciones/{conversationId} {
-
-      allow read: if signedIn()
-        && request.auth.uid in resource.data.participantIds;
-
+      allow read: if signedIn() && request.auth.uid in resource.data.participantIds;
       allow create: if signedIn()
         && request.resource.data.buyerId == request.auth.uid
         && request.resource.data.sellerId != request.auth.uid
@@ -315,7 +285,6 @@ service cloud.firestore {
         && request.resource.data.participantIds.size() == 2
         && request.auth.uid in request.resource.data.participantIds
         && request.resource.data.sellerId in request.resource.data.participantIds;
-
       allow update: if signedIn()
         && request.auth.uid in resource.data.participantIds
         && request.resource.data.buyerId == resource.data.buyerId
@@ -323,20 +292,17 @@ service cloud.firestore {
         && request.resource.data.participantIds == resource.data.participantIds
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(["updatedAt","lastMessagePreview","lastMessageSenderId"]);
-
       allow delete: if false;
 
       match /mensajes/{messageId} {
         allow read: if signedIn()
           && request.auth.uid in get(/databases/$(database)/documents/conversaciones/$(conversationId)).data.participantIds;
-
         allow create: if signedIn()
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000
           && request.resource.data.createdAt is timestamp;
-
         allow update, delete: if false;
       }
     }
