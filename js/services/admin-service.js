@@ -1,6 +1,5 @@
 /* =====================================================
    PIPGO · ADMIN SERVICE
-   Única fuente de verdad para operaciones administrativas.
    ===================================================== */
 
 window.AdminService = {
@@ -8,9 +7,6 @@ window.AdminService = {
     ADMIN_EMAIL: (window.CONFIG && CONFIG.ADMIN_EMAIL) ||
                  'ivanalbertoperezramirez@gmail.com',
 
-    /* -------------------------------------------------
-       IDENTIDAD
-       ------------------------------------------------- */
     isAdmin() {
         const u = AppState.currentUser;
         if (!u || !u.email) return false;
@@ -21,9 +17,6 @@ window.AdminService = {
         return AppState.currentUser ? AppState.currentUser.uid : null;
     },
 
-    /* -------------------------------------------------
-       DASHBOARD
-       ------------------------------------------------- */
     async getDashboardStats() {
         const [usersSnap, appsSnap, recoveriesSnap] = await Promise.all([
             db.collection(CONFIG.COLLECTIONS.USERS).get(),
@@ -32,7 +25,6 @@ window.AdminService = {
         ]);
 
         let pending = 0, approved = 0, rejected = 0, needsInfo = 0;
-
         appsSnap.forEach(doc => {
             const s = doc.data().status;
             if (s === 'pending')         pending++;
@@ -43,26 +35,17 @@ window.AdminService = {
 
         return {
             totalUsers: usersSnap.size,
-            pending,
-            approved,
-            rejected,
-            needsInfo,
+            pending, approved, rejected, needsInfo,
             pendingRecoveries: recoveriesSnap.size
         };
     },
 
-    /* -------------------------------------------------
-       SOLICITUDES DE VENDEDOR
-       ------------------------------------------------- */
     async listApplications(filter = 'all') {
         let query = db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS);
-        if (filter && filter !== 'all') {
-            query = query.where('status', '==', filter);
-        }
+        if (filter && filter !== 'all') query = query.where('status', '==', filter);
 
         const snap = await query.get();
         const apps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
         if (!apps.length) return [];
 
         const usersSnap = await db.collection(CONFIG.COLLECTIONS.USERS).get();
@@ -83,23 +66,30 @@ window.AdminService = {
         return enriched;
     },
 
-    /* -------------------------------------------------
-       USUARIOS
-       ------------------------------------------------- */
     async listUsers() {
         const snap = await db.collection(CONFIG.COLLECTIONS.USERS).get();
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     },
 
     /* -------------------------------------------------
-       ACCIÓN: APROBAR VENDEDOR
+       APROBAR — ahora también replica información
+       pública en perfilesPublicos/{uid}
        ------------------------------------------------- */
     async approve(uid) {
         if (!this.isAdmin()) throw new Error('FORBIDDEN');
         const adminUid = this.getAdminUid();
         const now = firebase.firestore.FieldValue.serverTimestamp();
 
+        const [appSnap, userSnap] = await Promise.all([
+            db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS).doc(uid).get(),
+            db.collection(CONFIG.COLLECTIONS.USERS).doc(uid).get()
+        ]);
+
+        const app = appSnap.exists ? appSnap.data() : {};
+        const user = userSnap.exists ? userSnap.data() : {};
+
         const batch = db.batch();
+
         batch.update(db.collection(CONFIG.COLLECTIONS.USERS).doc(uid), {
             role: 'seller',
             sellerStatus: 'approved',
@@ -117,12 +107,32 @@ window.AdminService = {
             },
             { merge: true }
         );
+
+        // Datos públicos del vendedor (destinados a perfilesPublicos)
+        batch.set(
+            db.collection(CONFIG.COLLECTIONS.PUBLIC_PROFILES).doc(uid),
+            {
+                uid,
+                username: user.username || '',
+                usernameNormalized: user.usernameNormalized || '',
+                avatarUrl: user.avatarUrl || '',
+                displayName: app.displayName || '',
+                businessName: app.businessName || '',
+                sellerType: app.sellerType || 'person',
+                category: app.category || '',
+                description: app.description || '',
+                phone: app.phone || '',
+                city: app.city || '',
+                state: app.state || '',
+                socialUrl: app.socialUrl || '',
+                contactMethod: app.contactMethod || 'phone'
+            },
+            { merge: true }
+        );
+
         await batch.commit();
     },
 
-    /* -------------------------------------------------
-       ACCIÓN: RECHAZAR VENDEDOR
-       ------------------------------------------------- */
     async reject(uid, reason) {
         if (!this.isAdmin()) throw new Error('FORBIDDEN');
         const adminUid = this.getAdminUid();
@@ -147,9 +157,6 @@ window.AdminService = {
         await batch.commit();
     },
 
-    /* -------------------------------------------------
-       ACCIÓN: SOLICITAR INFORMACIÓN
-       ------------------------------------------------- */
     async requestInfo(uid, note) {
         if (!this.isAdmin()) throw new Error('FORBIDDEN');
         const adminUid = this.getAdminUid();
@@ -174,46 +181,27 @@ window.AdminService = {
         await batch.commit();
     },
 
-    /* =================================================
-       RECUPERACIÓN DE CONTRASEÑA
-       ================================================= */
+    /* ------------- Recuperaciones (sin cambios) ------------- */
 
-    /**
-     * Lista solicitudes de recuperación por estado.
-     * @param {'pending'|'approved'|'rejected'|'all'} filter
-     */
     async listPasswordResetRequests(filter = 'pending') {
         let query = db.collection('solicitudesRecuperacion');
-        if (filter && filter !== 'all') {
-            query = query.where('status', '==', filter);
-        }
-
+        if (filter && filter !== 'all') query = query.where('status', '==', filter);
         const snap = await query.get();
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
         list.sort((a, b) => {
             const ta = a.requestedAt && a.requestedAt.toDate ? a.requestedAt.toDate().getTime() : 0;
             const tb = b.requestedAt && b.requestedAt.toDate ? b.requestedAt.toDate().getTime() : 0;
             return tb - ta;
         });
-
         return list;
     },
 
-    /**
-     * Aprueba una solicitud y dispara el email estándar
-     * de Firebase al usuario para que cambie su contraseña.
-     */
     async approvePasswordReset(docId, email) {
         if (!this.isAdmin()) throw new Error('FORBIDDEN');
-
-        // 1) Primero enviamos el email (si falla, no marcamos como aprobado).
         await AuthService.sendPasswordResetEmail(email);
 
-        // 2) Marcamos la solicitud como aprobada.
         const adminUid = this.getAdminUid();
         const now = firebase.firestore.FieldValue.serverTimestamp();
-
         await db.collection('solicitudesRecuperacion').doc(docId).update({
             status: 'approved',
             reviewedAt: now,
@@ -223,14 +211,10 @@ window.AdminService = {
         });
     },
 
-    /**
-     * Rechaza una solicitud de recuperación.
-     */
     async rejectPasswordReset(docId, reason) {
         if (!this.isAdmin()) throw new Error('FORBIDDEN');
         const adminUid = this.getAdminUid();
         const now = firebase.firestore.FieldValue.serverTimestamp();
-
         await db.collection('solicitudesRecuperacion').doc(docId).update({
             status: 'rejected',
             reviewedAt: now,

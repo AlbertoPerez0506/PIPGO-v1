@@ -3,44 +3,37 @@
    ===================================================== */
 
 window.AppState = {
-    /* ---------- Sesión ---------- */
     currentUser: null,
     currentProfile: null,
     currentPublicProfile: null,
 
-    /* ---------- Datos ---------- */
     currentPublications: [],
     favoriteIds: new Set(),
 
-    /* ---------- Navegación / UI ---------- */
     currentView: 'home',
     currentProduct: null,
 
-    /* ---------- Ubicación ---------- */
     currentLocation: null,
     userCity: null,
     userCoords: null,
     locationPermission: null,
 
-    /* ---------- Filtros ---------- */
     activeCategoryFilter: '',
 
-    /* ---------- Form ---------- */
     isSubmitting: false,
     formDirtyState: false,
 
-    /* ---------- Seller ---------- */
     currentSellerApplication: null,
 
-    /* ---------- Just-in-time auth ---------- */
     pendingAction: null,
 
-    /* ---------- Realtime Home ---------- */
     homeSubscription: null,
     hasPendingHomeUpdates: false,
     pendingHomePublications: [],
 
-    /* ---------- Preferencias ---------- */
+    // Messaging
+    currentConversationId: null,
+
     prefHapticsEnabled: true,
     prefSoundsEnabled: false,
 
@@ -56,7 +49,11 @@ window.AppState = {
         this.pendingAction = null;
         this.hasPendingHomeUpdates = false;
         this.pendingHomePublications = [];
-        // FIX: limpiar filtros activos para que no persistan entre sesiones.
         this.activeCategoryFilter = '';
+        this.currentConversationId = null;
+
+        if (window.SellerProfileService && SellerProfileService.clearCache) {
+            try { SellerProfileService.clearCache(); } catch (e) {}
+        }
     }
 };

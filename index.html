@@ -122,17 +122,22 @@
                 <div id="search-results" class="products-grid"></div>
             </section>
 
-            <!-- ============ VISTA: MENSAJES (V2) ============ -->
-            <section id="view-map" class="view">
-                <header class="view-header">
-                    <h2>Mensajes</h2>
+            <!-- ============ VISTA: MENSAJES ============ -->
+            <section id="view-messaging" class="view">
+                <header class="messaging-header-pro">
+                    <div class="messaging-header-top">
+                        <h2>Mensajes</h2>
+                    </div>
+                    <div class="search-bar-pro">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="messaging-search-input"
+                               placeholder="Buscar vendedores seguidos…" autocomplete="off">
+                        <button class="clear-search" id="messaging-clear-search" aria-label="Limpiar">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
                 </header>
-                <div class="coming-soon">
-                    <div class="coming-soon-icon"><i class="fa-solid fa-comments"></i></div>
-                    <h3>Mensajes directos</h3>
-                    <p>Chatea directamente con los vendedores desde la app.</p>
-                    <span class="badge-dev">En desarrollo · V2</span>
-                </div>
+                <div id="messaging-content" class="messaging-content"></div>
             </section>
 
             <!-- ============ VISTA: ANUNCIARME ============ -->
@@ -150,9 +155,7 @@
 
                <div class="form-wrapper hidden" id="form-wrapper">
 
-    <!-- =====================================================
-         PASO 1: SELECCIÓN DE TIPO DE VENDEDOR
-         ===================================================== -->
+    <!-- PASO 1: SELECCIÓN DE TIPO DE VENDEDOR -->
     <div class="form-step" id="step-type">
         <div class="step-hero">
             <span class="step-hero-eyebrow">
@@ -202,9 +205,7 @@
         </div>
     </div>
 
-    <!-- =====================================================
-         PASO 2: FORMULARIO
-         ===================================================== -->
+    <!-- PASO 2: FORMULARIO -->
     <form id="publication-form" class="publication-form hidden">
         <button type="button" class="btn-back" id="btn-back-type">
             <i class="fa-solid fa-arrow-left"></i> Volver
@@ -516,6 +517,17 @@
                 <div class="sheet-content" id="sheet-content">
                     <div class="sheet-category-badge" id="sheet-category"></div>
                     <h2 id="sheet-name" class="sheet-title"></h2>
+
+                    <!-- Identidad pública del vendedor -->
+                    <button class="sheet-seller-block" id="sheet-seller-block" type="button">
+                        <div class="sheet-seller-avatar" id="sheet-seller-avatar"></div>
+                        <div class="sheet-seller-text">
+                            <span class="sheet-seller-username" id="sheet-seller-username">@usuario</span>
+                            <span class="sheet-seller-role">Vendedor</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right sheet-seller-arrow"></i>
+                    </button>
+
                     <div class="sheet-badges-row hidden" id="sheet-badges-row"></div>
                     <p class="sheet-store-name" id="sheet-store"></p>
                     <div class="sheet-price-row">
@@ -568,9 +580,8 @@
                         </button>
                     </div>
 
-                    <button class="btn-chat-v2" id="btn-chat-v2">
-                        <i class="fa-solid fa-comment-dots"></i> Mensaje directo
-                        <span class="badge-dev-sm">V2</span>
+                    <button class="btn-chat-v2 active" id="btn-chat-v2">
+                        <i class="fa-solid fa-comment-dots"></i> Mensaje
                     </button>
                 </div>
             </div>
@@ -582,6 +593,53 @@
             <div class="lightbox-counter" id="lightbox-counter">1 / 1</div>
             <div class="lightbox-track" id="lightbox-track"></div>
             <div class="lightbox-dots" id="lightbox-dots"></div>
+        </div>
+
+        <!-- ============ SELLER PROFILE SHEET ============ -->
+        <div id="seller-profile-backdrop" class="sheet-backdrop">
+            <div id="seller-profile-sheet" class="product-sheet seller-profile-sheet">
+                <div class="sheet-drag-zone"><div class="sheet-handle"></div></div>
+                <div id="seller-profile-content"></div>
+            </div>
+        </div>
+
+        <!-- ============ CHAT OVERLAY ============ -->
+        <div id="chat-overlay" class="chat-overlay hidden">
+            <header class="chat-header" id="chat-header">
+                <button class="chat-back" id="chat-back" aria-label="Volver">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <button class="chat-seller-info" id="chat-seller-info" type="button">
+                    <div class="chat-avatar" id="chat-avatar"></div>
+                    <div class="chat-seller-text">
+                        <span class="chat-seller-username" id="chat-seller-username">@usuario</span>
+                        <span class="chat-seller-role" id="chat-seller-role">Vendedor</span>
+                    </div>
+                </button>
+            </header>
+
+            <div class="chat-context-banner hidden" id="chat-context-banner">
+                <i class="fa-solid fa-tag"></i>
+                <span>Sobre esta publicación:</span>
+                <strong id="chat-context-name">—</strong>
+                <button id="chat-context-open" type="button">Ver</button>
+            </div>
+
+            <div class="chat-messages" id="chat-messages"></div>
+
+            <button class="chat-new-messages hidden" id="chat-new-messages" type="button">
+                <i class="fa-solid fa-arrow-down"></i>
+                <span id="chat-new-messages-text">1 mensaje nuevo</span>
+            </button>
+
+            <div class="chat-composer">
+                <textarea id="chat-input" placeholder="Escribe un mensaje…" rows="1" maxlength="2000"></textarea>
+                <button id="chat-send" aria-label="Enviar">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+
+            <div class="chat-message-menu hidden" id="chat-message-menu"></div>
         </div>
 
         <!-- ============ MODAL AUTH ============ -->
@@ -860,7 +918,7 @@
             <button class="nav-item nav-center" data-view="anunciarme" aria-label="Crear publicación">
                 <i class="fa-solid fa-plus"></i><span>Anunciarme</span>
             </button>
-            <button class="nav-item" data-view="map" aria-label="Mensajes">
+            <button class="nav-item" data-view="messaging" aria-label="Mensajes">
                 <i class="fa-solid fa-comments"></i><span>Mensajes</span>
             </button>
             <button class="nav-item" data-view="perfil" aria-label="Perfil">
@@ -877,21 +935,25 @@
 
 <input type="file" id="avatar-input" accept="image/*" hidden>
 
+<!-- ============ CORE ============ -->
 <script src="js/core/app-state.js"></script>
 <script src="js/core/logger.js"></script>
 <script src="js/core/error-handler.js"></script>
 <script src="js/core/storage.js"></script>
 <script src="js/core/navigation.js"></script>
 
+<!-- ============ CONFIG ============ -->
 <script src="js/config/firebase-config.js"></script>
 <script src="js/config/config.js"></script>
 <script src="js/config/units.js"></script>
 <script src="js/config/category-config.js"></script>
 
+<!-- ============ UTILS ============ -->
 <script src="js/utils/validators.js"></script>
 <script src="js/utils/formatters.js"></script>
 <script src="js/utils/dom.js"></script>
 
+<!-- ============ SERVICES ============ -->
 <script src="js/services/permission-service.js"></script>
 <script src="js/services/auth-service.js"></script>
 <script src="js/services/user-service.js"></script>
@@ -904,11 +966,18 @@
 <script src="js/services/haptics-service.js"></script>
 <script src="js/services/admin-service.js"></script>
 
+<!-- Mensajería + perfil público de vendedor -->
+<script src="js/services/seller-profile-service.js"></script>
+<script src="js/services/conversation-service.js"></script>
+<script src="js/services/message-service.js"></script>
+
+<!-- ============ COMPONENTS ============ -->
 <script src="js/components/toast.js"></script>
 <script src="js/components/splash.js"></script>
 <script src="js/components/connectivity-ui.js"></script>
 <script src="js/components/confirm-dialog.js"></script>
 
+<!-- ============ FEATURES ============ -->
 <script src="js/features/auth/auth-ui.js"></script>
 <script src="js/features/profile/profile-ui.js"></script>
 <script src="js/features/publications/publication-ui.js"></script>
@@ -916,6 +985,11 @@
 <script src="js/features/seller/seller-ui.js"></script>
 <script src="js/features/admin/admin-ui.js"></script>
 
+<!-- SellerProfileUI antes que MessagingUI (MessagingUI puede abrirlo) -->
+<script src="js/features/seller-profile/seller-profile-ui.js"></script>
+<script src="js/features/messaging/messaging-ui.js"></script>
+
+<!-- ============ BOOTSTRAP ============ -->
 <script src="js/app.js"></script>
 </body>
 </html>

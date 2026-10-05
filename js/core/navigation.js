@@ -6,16 +6,12 @@
     function switchView(viewName, { push = false, force = false } = {}) {
         const isSameView = viewName === AppState.currentView;
 
-        // Si el usuario toca la pestaña donde ya está,
-        // solo hacemos scroll al top y NO re-renderizamos.
         if (isSameView && push && !force) {
             mainContent.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }
-
         if (isSameView && !push && !force) return;
 
-        // Guard de cambios sin guardar al salir de "anunciarme"
         if (!force &&
             AppState.currentView === 'anunciarme' &&
             viewName !== 'anunciarme' &&
@@ -46,7 +42,6 @@
         if (leavingHome && window.PublicationUI && PublicationUI.onLeaveHome) {
             PublicationUI.onLeaveHome();
         }
-
         if (enteringHome) {
             if (window.PipGoHomeHeader) window.PipGoHomeHeader.reset();
             if (window.PublicationUI && PublicationUI.onEnterHome) PublicationUI.onEnterHome();
@@ -55,13 +50,7 @@
         if (viewName === 'anunciarme') PublicationUI.updateAuthUI();
 
         if (viewName === 'perfil') {
-            /* FIX: si entramos al perfil viniendo de OTRA vista,
-               reseteamos la pestaña activa a "Mis publicaciones".
-               Si ya estábamos en perfil (re-render interno por
-               avatar, username, etc.), conservamos la pestaña. */
-            if (previousView !== 'perfil' &&
-                window.ProfileUI &&
-                ProfileUI.resetActiveTab) {
+            if (previousView !== 'perfil' && window.ProfileUI && ProfileUI.resetActiveTab) {
                 ProfileUI.resetActiveTab();
             }
             ProfileUI.renderProfile();
@@ -69,6 +58,7 @@
 
         if (viewName === 'search') PublicationUI.onEnterSearch();
         if (viewName === 'admin' && window.AdminUI) AdminUI.onEnterAdmin();
+        if (viewName === 'messaging' && window.MessagingUI) MessagingUI.onEnterMessaging();
 
         if (push) {
             const last = navigationStack[navigationStack.length - 1];
@@ -87,6 +77,14 @@
     }
 
     function closeAllOverlays() {
+        // Nuevos overlays primero
+        if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
+            MessagingUI.closeChat(); return true;
+        }
+        if (window.SellerProfileUI && SellerProfileUI.isOpen && SellerProfileUI.isOpen()) {
+            SellerProfileUI.close(); return true;
+        }
+
         if (PublicationUI.isProductSheetOpen && PublicationUI.isProductSheetOpen()) {
             PublicationUI.closeProductSheet(true); return true;
         }
@@ -118,6 +116,12 @@
     }
 
     function onBackButton(e) {
+        if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
+            e.preventDefault(); MessagingUI.closeChat(); return;
+        }
+        if (window.SellerProfileUI && SellerProfileUI.isOpen && SellerProfileUI.isOpen()) {
+            e.preventDefault(); SellerProfileUI.close(); return;
+        }
         if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
             e.preventDefault(); PublicationUI.closeLightbox(); return;
         }
@@ -148,7 +152,14 @@
 
     function handlePopState(event) {
         if (PublicationUI.consumeSuppressPopstate && PublicationUI.consumeSuppressPopstate()) return;
+        if (window.MessagingUI && MessagingUI.consumeSuppressPopstate && MessagingUI.consumeSuppressPopstate()) return;
 
+        if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
+            MessagingUI.closeChat(false); return;
+        }
+        if (window.SellerProfileUI && SellerProfileUI.isOpen && SellerProfileUI.isOpen()) {
+            SellerProfileUI.close(false); return;
+        }
         if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
             PublicationUI.closeLightbox(false); return;
         }

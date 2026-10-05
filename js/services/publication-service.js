@@ -1,20 +1,22 @@
 /* =====================================================
    PIPGO · PUBLICATION SERVICE
-   CRUD de publicaciones + suscripción realtime.
-   Sin lógica de UI.
-   Soporta status: 'active' | 'sold' | 'deleted'
    ===================================================== */
 
 window.PublicationService = {
 
     async create(data) {
-        return await db.collection(CONFIG.COLLECTIONS.PUBLICATIONS).add({
+        const profile = AppState.currentProfile || {};
+        const enriched = {
             ...data,
+            sellerUsername: profile.username || '',
+            sellerAvatarUrl: profile.avatarUrl || '',
+            sellerDisplayName: '',
             status: 'active',
             soldAt: null,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        };
+        return await db.collection(CONFIG.COLLECTIONS.PUBLICATIONS).add(enriched);
     },
 
     async getActivePublications() {
@@ -41,11 +43,8 @@ window.PublicationService = {
                     else if (change.type === 'modified') changes.modified.push(data);
                     else if (change.type === 'removed')  changes.removed.push(data);
                 });
-                try {
-                    onChange(changes, snapshot);
-                } catch (e) {
-                    if (window.Logger) Logger.error('subscribeActivePublications onChange falló', e);
-                }
+                try { onChange(changes, snapshot); }
+                catch (e) { if (window.Logger) Logger.error('subscribeActivePublications onChange falló', e); }
             },
             (error) => {
                 if (window.Logger) Logger.error('subscribeActivePublications error', error);
@@ -84,6 +83,9 @@ window.PublicationService = {
         delete updateData.createdAt;
         delete updateData.status;
         delete updateData.soldAt;
+        delete updateData.sellerUsername;
+        delete updateData.sellerAvatarUrl;
+        delete updateData.sellerDisplayName;
         updateData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
         await db.collection(CONFIG.COLLECTIONS.PUBLICATIONS).doc(id).update(updateData);
     },

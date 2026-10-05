@@ -4,6 +4,7 @@
    Lightbox, WhatsApp, unidades, condición, presentación,
    contador, vista previa, borrador, protección de salida,
    empty states inteligentes, skeletons y haptics.
+   + Integración con SellerProfileUI y MessagingUI.
    ===================================================== */
 
 (function () {
@@ -21,6 +22,7 @@
     let sheetRefsBlock, sheetRefs, sheetRef;
     let sheetContactRow, sheetPhone, sheetCall, sheetWhatsapp;
     let sheetScheduleBlock, sheetScheduleText, sheetBadgesRow;
+    let sheetSellerBlock, sheetSellerAvatar, sheetSellerUsername;
     let btnDirections, sheetMapLink, btnChatV2;
 
     let productHasWhatsappInput;
@@ -127,10 +129,6 @@
         return tb - ta;
     }
 
-    /* =====================================================
-       FIX: BADGE DE FILTROS ACTIVOS
-       Se actualiza cada vez que cambian los filtros.
-       ===================================================== */
     function updateFilterBadge() {
         const badge = document.getElementById('filter-badge');
         if (!badge) return;
@@ -138,10 +136,6 @@
         badge.classList.toggle('hidden', !hasFilters);
     }
 
-    /* =====================================================
-       FIX: SUBTÍTULO DINÁMICO EN SEARCH
-       Refleja la cantidad de resultados y la consulta activa.
-       ===================================================== */
     function updateSearchSubtitle() {
         if (!searchSubtitle) return;
         const query = searchInput ? searchInput.value.trim() : '';
@@ -847,7 +841,6 @@
         });
     }
 
-    /* --- Con debounce: el feedback visual es inmediato, el filtrado no. --- */
     function handleSearchInput() {
         const query = searchInput.value.trim();
         if (query) {
@@ -1488,8 +1481,6 @@
 
     /* =====================================================
        SUBMIT
-       FIX: best-effort en el manejo de fallos para
-       reconocer y loguear imágenes huérfanas.
        ===================================================== */
     async function handleSubmit(e) {
         e.preventDefault();
@@ -1531,7 +1522,6 @@
         AppState.isSubmitting = true;
         btnSubmit.disabled = true;
 
-        // FIX: registrar URLs subidas para poder reportar huérfanas en logs.
         const uploadedUrls = [];
 
         try {
@@ -1624,8 +1614,6 @@
             NavigationUI.switchView('home');
 
         } catch (error) {
-            // FIX: si quedaron URLs subidas sin publicar, dejamos rastro
-            // para poder limpiarlas manualmente en Cloudinary si es necesario.
             if (uploadedUrls.length) {
                 Logger.warn('Imágenes subidas sin publicación (posibles huérfanas)', {
                     context: 'publication.submit',
@@ -1759,6 +1747,44 @@
 
         sheetCategory.textContent = product.category || 'Producto';
         sheetName.textContent = product.name || '';
+
+        // === Identidad del vendedor ===
+        if (sheetSellerBlock) {
+            sheetSellerBlock.classList.remove('hidden');
+            sheetSellerAvatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+            sheetSellerUsername.textContent = '@…';
+            sheetSellerBlock.dataset.uid = product.userId || '';
+
+            // Fast path: si ya viene en la publicación
+            if (product.sellerUsername || product.sellerAvatarUrl) {
+                if (product.sellerAvatarUrl) {
+                    sheetSellerAvatar.innerHTML =
+                        `<img src="${Formatters.safeUrl(product.sellerAvatarUrl)}" alt="">`;
+                }
+                sheetSellerUsername.textContent = product.sellerUsername
+                    ? '@' + product.sellerUsername
+                    : '@usuario';
+            } else if (window.SellerProfileService && product.userId) {
+                // Fallback: leer perfilesPublicos/{uid} con cache
+                SellerProfileService.resolveIdentity(product).then(identity => {
+                    if (!identity) {
+                        // Sin identidad pública, ocultamos el bloque
+                        sheetSellerBlock.classList.add('hidden');
+                        return;
+                    }
+                    if (identity.avatarUrl) {
+                        sheetSellerAvatar.innerHTML =
+                            `<img src="${Formatters.safeUrl(identity.avatarUrl)}" alt="">`;
+                    }
+                    sheetSellerUsername.textContent = identity.username
+                        ? '@' + identity.username
+                        : '@usuario';
+                    sheetSellerBlock.dataset.uid = identity.uid || product.userId || '';
+                }).catch(() => {
+                    sheetSellerBlock.classList.add('hidden');
+                });
+            }
+        }
 
         if (product.storeName) {
             sheetStore.innerHTML = `<i class="fa-solid fa-store"></i> ${Formatters.escapeHtml(product.storeName)}`;
@@ -1967,8 +1993,6 @@
 
     let galStartX = 0, galCurX = 0, galSwiping = false;
 
-    /* FIX: acepta mouse y touch. Antes solo touch, lo que rompía
-       el drag horizontal de la galería en desktop. */
     function handleGalleryPointerDown(e) {
         if (e.pointerType === 'pen') return;
         galSwiping = true;
@@ -2222,6 +2246,9 @@
         sheetScheduleBlock = document.getElementById('sheet-schedule-block');
         sheetScheduleText = document.getElementById('sheet-schedule-text');
         sheetBadgesRow = document.getElementById('sheet-badges-row');
+        sheetSellerBlock = document.getElementById('sheet-seller-block');
+        sheetSellerAvatar = document.getElementById('sheet-seller-avatar');
+        sheetSellerUsername = document.getElementById('sheet-seller-username');
         btnDirections = document.getElementById('btn-directions');
         sheetMapLink = document.getElementById('sheet-map-link');
         btnChatV2 = document.getElementById('btn-chat-v2');
@@ -2433,17 +2460,59 @@
             });
         }
 
-        btnChatV2.addEventListener('click', () => {
-            if (window.PermissionService && !PermissionService.canMessage()) {
+        // === Bloque vendedor dentro del sheet: abre SellerProfileUI ===
+        if (sheetSellerBlock) {
+            sheetSellerBlock.addEventListener('click', () => {
+                const uid = sheetSellerBlock.dataset.uid;
+                if (!uid) return;
+                if (!window.SellerProfileUI) return;
+                SellerProfileUI.open(uid);
+            });
+        }
+
+        // === Botón "Mensaje" del Product Sheet → abre chat con contexto ===
+        btnChatV2.addEventListener('click', async () => {
+            const pub = AppState.currentProduct;
+            if (!pub || !pub.userId) return;
+
+            // No permitir chatear contigo mismo
+            if (AppState.currentUser && pub.userId === AppState.currentUser.uid) {
+                Toast.warning('Esta es tu propia publicación.');
+                return;
+            }
+
+            // Just-in-time auth
+            if (!AppState.currentUser) {
                 AppState.pendingAction = {
-                    type: 'openChat',
-                    productId: AppState.currentProduct && AppState.currentProduct.id
+                    type: 'openChatWith',
+                    sellerUid: pub.userId,
+                    fromPublication: true,
+                    publicationContext: { id: pub.id, name: pub.name, mainImage: pub.mainImage }
                 };
                 AuthUI.openAuthModal('login');
                 Toast.info('Inicia sesión para contactar al vendedor.');
                 return;
             }
-            Toast.info('Los mensajes directos llegarán en la V2.');
+
+            // Mostrar transición intencional
+            const originalHtml = btnChatV2.innerHTML;
+            btnChatV2.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Abriendo conversación…';
+            btnChatV2.disabled = true;
+
+            try {
+                closeProductSheet();
+                if (window.MessagingUI && MessagingUI.openChatWith) {
+                    MessagingUI.openChatWith(pub.userId, {
+                        fromPublication: true,
+                        publicationContext: { id: pub.id, name: pub.name, mainImage: pub.mainImage }
+                    });
+                } else {
+                    Toast.error('La mensajería no está disponible.');
+                }
+            } finally {
+                btnChatV2.innerHTML = originalHtml;
+                btnChatV2.disabled = false;
+            }
         });
 
         lightboxClose.addEventListener('click', () => closeLightbox());

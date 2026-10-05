@@ -5,8 +5,6 @@
 (function () {
     'use strict';
 
-    /* Lock para evitar que detectAndUpdateCity se ejecute
-       dos veces en paralelo (boot + click del chip). */
     let cityDetectionInFlight = null;
 
     function initializeFeatures() {
@@ -16,6 +14,8 @@
         FavoriteUI.init();
         SellerUI.init();
         AdminUI.init();
+        SellerProfileUI.init();
+        MessagingUI.init();
     }
 
     function getTimeGreeting() {
@@ -54,7 +54,7 @@
                     updateLocationChip(cityName);
                     return;
                 }
-            } catch (e) { /* silencioso */ }
+            } catch (e) {}
 
             const cached = Storage.get('user_city', null);
             if (cached) {
@@ -90,8 +90,6 @@
             });
         }
 
-        // Solo intentar refrescar si no hay caché reciente,
-        // evitando gastar GPS innecesariamente.
         if (!cached) {
             setTimeout(detectAndUpdateCity, 800);
         }
@@ -144,7 +142,6 @@
         window.PipGoHomeHeader = { reset };
     }
 
-    /* ---------- Pull-to-refresh ---------- */
     function initPullToRefresh() {
         const main = document.getElementById('main-content');
         if (!main) return;
@@ -202,13 +199,11 @@
                         const pubs = await PublicationService.getActivePublications();
                         AppState.currentPublications = pubs;
                         PublicationUI.onEnterSearch();
-                        PublicationUI.renderSearchResults(
-                            AppState.currentPublications
-                        );
+                        PublicationUI.renderSearchResults(AppState.currentPublications);
                     } else if (AppState.currentView === 'perfil' && window.ProfileUI) {
                         await ProfileUI.renderProfile();
-                    } else if (AppState.currentView === 'anunciarme' && window.PermissionService) {
-                        // no-op
+                    } else if (AppState.currentView === 'messaging' && window.MessagingUI) {
+                        await MessagingUI.onEnterMessaging();
                     }
                 } catch (e) {
                     if (window.Logger) Logger.warn('Pull-to-refresh error', e);
@@ -235,8 +230,13 @@
             case 'toggleFavorite':
                 if (window.FavoriteUI) FavoriteUI.toggleFavorite(action.publicationId);
                 break;
-            case 'openChat':
-                Toast.info('Los mensajes directos llegarán en la V2.');
+            case 'openChatWith':
+                if (window.MessagingUI && MessagingUI.openChatWith) {
+                    MessagingUI.openChatWith(action.sellerUid, {
+                        fromPublication: !!action.fromPublication,
+                        publicationContext: action.publicationContext || null
+                    });
+                }
                 break;
             case 'openSellerForm':
                 if (window.SellerUI) SellerUI.open();
@@ -244,14 +244,6 @@
         }
     }
 
-    /* =====================================================
-       AUTH OBSERVER
-       FIX: cada actualización de UI va protegida con su
-       propio try/catch. Antes, un error en cualquier
-       eslabón (updateAuthUI, updateAllButtons, etc.)
-       interrumpía la cadena y el perfil nunca se
-       renderizaba tras iniciar sesión.
-       ===================================================== */
     function initializeAuthObserver() {
         AuthService.onAuthStateChanged(async (user) => {
             const wasAuthenticated = !!AppState.currentUser;
@@ -260,25 +252,16 @@
             if (user) {
                 try {
                     let profile = await UserService.getProfile(user.uid);
-
-                    // Reintento corto por si el doc aún no se ha propagado.
                     if (!profile) {
                         for (let i = 0; i < 3 && !profile; i++) {
                             await new Promise(r => setTimeout(r, 300));
                             profile = await UserService.getProfile(user.uid);
                         }
                     }
-
                     AppState.currentProfile = profile;
-
                     if (profile) {
                         try { await FavoriteUI.loadFavorites(user.uid); } catch (e) {}
                     }
-
-                    Logger.info('Auth observer: perfil', {
-                        uid: user.uid,
-                        hasProfile: !!profile
-                    });
                 } catch (error) {
                     Logger.error('Error cargando perfil al autenticar', error);
                     AppState.currentProfile = null;
@@ -289,29 +272,16 @@
                     PublicationUI.stopHomeSubscription) {
                     PublicationUI.stopHomeSubscription();
                 }
+                // Refrescar vista Mensajes si está activa
+                if (AppState.currentView === 'messaging' && window.MessagingUI) {
+                    MessagingUI.onEnterMessaging();
+                }
             }
 
-            // Cada actualización protegida de forma independiente.
-            try { updateHomeGreeting(user); }
-            catch (e) { Logger.error('updateHomeGreeting falló', e); }
-
-            try {
-                if (window.PublicationUI && PublicationUI.updateAuthUI) {
-                    PublicationUI.updateAuthUI();
-                }
-            } catch (e) { Logger.error('updateAuthUI falló', e); }
-
-            try {
-                if (window.ProfileUI && ProfileUI.renderProfile) {
-                    ProfileUI.renderProfile();
-                }
-            } catch (e) { Logger.error('renderProfile falló', e); }
-
-            try {
-                if (window.FavoriteUI && FavoriteUI.updateAllButtons) {
-                    FavoriteUI.updateAllButtons();
-                }
-            } catch (e) { Logger.error('updateAllButtons falló', e); }
+            try { updateHomeGreeting(user); } catch (e) {}
+            try { if (window.PublicationUI && PublicationUI.updateAuthUI) PublicationUI.updateAuthUI(); } catch (e) {}
+            try { if (window.ProfileUI && ProfileUI.renderProfile) ProfileUI.renderProfile(); } catch (e) {}
+            try { if (window.FavoriteUI && FavoriteUI.updateAllButtons) FavoriteUI.updateAllButtons(); } catch (e) {}
 
             if (user && AppState.pendingAction) {
                 setTimeout(runPendingAction, 180);
@@ -319,59 +289,42 @@
         });
     }
 
-    /* =====================================================
-       HANDLER GLOBAL DE ESCAPE
-       Cierra overlays en orden de jerarquía. Los modales
-       con lógica propia (ConfirmDialog) gestionan su
-       Escape por su cuenta y NO se tocan aquí.
-       ===================================================== */
     function initGlobalEscapeHandler() {
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') return;
 
-            // Orden: overlays superpuestos primero.
+            if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
+                e.preventDefault(); MessagingUI.closeChat(); return;
+            }
+            if (window.SellerProfileUI && SellerProfileUI.isOpen && SellerProfileUI.isOpen()) {
+                e.preventDefault(); SellerProfileUI.close(); return;
+            }
+
             if (window.PublicationUI) {
                 if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
-                    e.preventDefault();
-                    PublicationUI.closeLightbox();
-                    return;
+                    e.preventDefault(); PublicationUI.closeLightbox(); return;
                 }
                 if (PublicationUI.isProductSheetOpen && PublicationUI.isProductSheetOpen()) {
-                    e.preventDefault();
-                    PublicationUI.closeProductSheet();
-                    return;
+                    e.preventDefault(); PublicationUI.closeProductSheet(); return;
                 }
                 if (PublicationUI.isPreviewModalOpen && PublicationUI.isPreviewModalOpen()) {
-                    e.preventDefault();
-                    PublicationUI.closePreview();
-                    return;
+                    e.preventDefault(); PublicationUI.closePreview(); return;
                 }
                 if (PublicationUI.isFilterModalOpen && PublicationUI.isFilterModalOpen()) {
-                    e.preventDefault();
-                    PublicationUI.closeFilterModal();
-                    return;
+                    e.preventDefault(); PublicationUI.closeFilterModal(); return;
                 }
             }
 
             if (window.AdminUI && AdminUI.isConfirmModalOpen && AdminUI.isConfirmModalOpen()) {
-                e.preventDefault();
-                AdminUI.closeConfirm();
-                return;
+                e.preventDefault(); AdminUI.closeConfirm(); return;
             }
-
             if (window.AuthUI && AuthUI.isAuthModalOpen && AuthUI.isAuthModalOpen()) {
-                e.preventDefault();
-                AuthUI.closeAuthModal();
-                return;
+                e.preventDefault(); AuthUI.closeAuthModal(); return;
             }
-
             if (window.ProfileUI && ProfileUI.isSettingsModalOpen && ProfileUI.isSettingsModalOpen()) {
-                e.preventDefault();
-                ProfileUI.closeSettings();
-                return;
+                e.preventDefault(); ProfileUI.closeSettings(); return;
             }
 
-            // Modales sin lógica colateral: se cierran directo.
             ['draft-modal', 'seller-modal'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el && !el.classList.contains('hidden')) {

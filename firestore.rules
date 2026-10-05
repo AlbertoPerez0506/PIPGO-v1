@@ -75,11 +75,13 @@ service cloud.firestore {
     // ============================================================
     match /perfilesPublicos/{uid} {
       allow read: if true;
+
       allow create: if isOwner(uid)
         && request.resource.data.uid == uid
         && validUsername(request.resource.data.username)
         && usernameNormalizedMatches(request.resource.data.username, request.resource.data.usernameNormalized)
         && request.resource.data.avatarUrl is string;
+
       allow update: if isAdmin()
         || (
           isOwner(uid)
@@ -87,8 +89,13 @@ service cloud.firestore {
           && validUsername(request.resource.data.username)
           && usernameNormalizedMatches(request.resource.data.username, request.resource.data.usernameNormalized)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(["avatarUrl","username","usernameNormalized"])
+               .hasOnly([
+                 "avatarUrl","username","usernameNormalized",
+                 "displayName","businessName","sellerType","category",
+                 "description","phone","city","state","socialUrl","contactMethod"
+               ])
         );
+
       allow delete: if false;
     }
 
@@ -219,6 +226,9 @@ service cloud.firestore {
         && (!('presentation' in request.resource.data)
             || request.resource.data.presentation == null
             || request.resource.data.presentation is map)
+        && (!('sellerUsername' in request.resource.data) || request.resource.data.sellerUsername is string)
+        && (!('sellerAvatarUrl' in request.resource.data) || request.resource.data.sellerAvatarUrl is string)
+        && (!('sellerDisplayName' in request.resource.data) || request.resource.data.sellerDisplayName is string)
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.soldAt == null;
@@ -227,6 +237,10 @@ service cloud.firestore {
         && request.resource.data.userId == resource.data.userId
         && request.resource.data.createdAt == resource.data.createdAt
         && (!('hasWhatsapp' in request.resource.data) || request.resource.data.hasWhatsapp is bool)
+        && (request.resource.data.sellerUsername == resource.data.sellerUsername
+            || !('sellerUsername' in resource.data))
+        && (request.resource.data.sellerAvatarUrl == resource.data.sellerAvatarUrl
+            || !('sellerAvatarUrl' in resource.data))
         && (
           (resource.data.status == "active" && request.resource.data.status in ["active", "sold", "deleted"])
           || (resource.data.status == "sold" && request.resource.data.status == "deleted")
@@ -242,13 +256,8 @@ service cloud.firestore {
 
     // ============================================================
     // SOLICITUDES DE RECUPERACIÓN DE CONTRASEÑA
-    // El usuario crea (sin auth). El admin lee y actualiza.
-    // El usuario NO puede leer ni actualizar sus propias
-    // solicitudes (evita filtración de correos).
     // ============================================================
     match /solicitudesRecuperacion/{docId} {
-
-      // Crear: cualquiera (usuario no autenticado)
       allow create: if
         request.resource.data.email is string
         && validEmail(request.resource.data.email)
@@ -259,10 +268,8 @@ service cloud.firestore {
         && request.resource.data.emailSentAt == null
         && request.resource.data.rejectionReason == null;
 
-      // Leer: solo admin
       allow read: if isAdmin();
 
-      // Actualizar: solo admin (aprobar / rechazar)
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly([
@@ -274,36 +281,121 @@ service cloud.firestore {
     }
 
     // ============================================================
-    // CONVERSACIONES (V2)
+    // CONVERSACIONES + MENSAJES
+    //
+    // FIX CRÍTICO:
+    // Antes, allow read exigía ser participante. Cuando el documento
+    // no existía, resource era null, la expresión fallaba, y Firestore
+    // devolvía permission-denied. Eso rompía getOrCreateConversation
+    // en el get() inicial antes de crear la conversación.
+    //
+    // Ahora permitimos leer cuando resource == null (documento
+    // inexistente) para que el cliente pueda decidir si crear la
+    // conversación. Sigue siendo seguro: solo el participante puede
+    // leer conversaciones que existen.
     // ============================================================
     match /conversaciones/{conversationId} {
-      allow read: if signedIn() && request.auth.uid in resource.data.participantIds;
+
+      function isParticipantOfExisting() {
+        return signedIn()
+          && resource != null
+          && request.auth.uid in resource.data.participantIds;
+      }
+
+      allow read: if signedIn() && (
+        resource == null
+        || request.auth.uid in resource.data.participantIds
+      );
+
       allow create: if signedIn()
-        && request.resource.data.buyerId == request.auth.uid
-        && request.resource.data.sellerId != request.auth.uid
         && request.resource.data.participantIds is list
         && request.resource.data.participantIds.size() == 2
         && request.auth.uid in request.resource.data.participantIds
-        && request.resource.data.sellerId in request.resource.data.participantIds;
-      allow update: if signedIn()
-        && request.auth.uid in resource.data.participantIds
-        && request.resource.data.buyerId == resource.data.buyerId
-        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.participantIds[0] != request.resource.data.participantIds[1]
+        && request.resource.data.status == 'active'
+        && request.resource.data.lastMessage is string
+        && request.resource.data.lastMessage.size() <= 200
+        && request.resource.data.lastMessageSenderId is string
+        && request.resource.data.readAtBy is map
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      allow update: if isParticipantOfExisting()
         && request.resource.data.participantIds == resource.data.participantIds
+        && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(["updatedAt","lastMessagePreview","lastMessageSenderId"]);
+             .hasOnly([
+               'lastMessage','lastMessageAt','lastMessageSenderId',
+               'lastMessageExpiresAt','updatedAt','readAtBy','status'
+             ]);
+
       allow delete: if false;
 
       match /mensajes/{messageId} {
-        allow read: if signedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/conversaciones/$(conversationId)).data.participantIds;
-        allow create: if signedIn()
+        function isConvParticipant() {
+          return signedIn()
+            && request.auth.uid in get(/databases/$(database)/documents/conversaciones/$(conversationId)).data.participantIds;
+        }
+
+        allow read: if isConvParticipant();
+
+        allow create: if isConvParticipant()
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000
-          && request.resource.data.createdAt is timestamp;
-        allow update, delete: if false;
+          && request.resource.data.type in ['text','publication_context']
+          && (request.resource.data.publicationId == null
+              || request.resource.data.publicationId is string)
+          && (request.resource.data.publicationName == null
+              || request.resource.data.publicationName is string)
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.expiresAt is timestamp
+          && request.resource.data.edited == false
+          && request.resource.data.deletedForEveryone == false
+          && request.resource.data.hiddenFor is list
+          && request.resource.data.hiddenFor.size() == 0;
+
+        allow update: if isConvParticipant() && (
+          // 1) Editar texto del propio mensaje
+          (
+            resource.data.senderId == request.auth.uid
+            && !resource.data.deletedForEveryone
+            && request.resource.data.senderId == resource.data.senderId
+            && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.expiresAt == resource.data.expiresAt
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['text','edited','updatedAt'])
+            && request.resource.data.edited == true
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 2000
+          )
+          ||
+          // 2) Eliminar para todos (solo autor)
+          (
+            resource.data.senderId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['deletedForEveryone','text','updatedAt'])
+            && request.resource.data.deletedForEveryone == true
+          )
+          ||
+          // 3) Eliminar para mí (cualquier participante, solo su uid en hiddenFor)
+          (
+            request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['hiddenFor'])
+            && request.resource.data.hiddenFor.hasAll(resource.data.hiddenFor)
+            && request.resource.data.hiddenFor.size() == resource.data.hiddenFor.size() + 1
+            && request.resource.data.hiddenFor.hasAny([request.auth.uid])
+            && !(resource.data.hiddenFor.hasAny([request.auth.uid]))
+          )
+        );
+
+        // Limpieza oportunista: solo se pueden borrar mensajes ya expirados.
+        allow delete: if isConvParticipant()
+          && resource.data.expiresAt is timestamp
+          && resource.data.expiresAt <= request.time;
       }
     }
   }

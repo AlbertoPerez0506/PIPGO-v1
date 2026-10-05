@@ -1478,3 +1478,29 @@
     margin: 0;
     line-height: 1.4;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.btn-chat-v2.active {
+    border: none;
+    background: var(--accent-light);
+    color: var(--accent-dark);
+    cursor: pointer;
+    opacity: 1;
+}
+.btn-chat-v2.active:active { transform: scale(0.98); background: var(--accent-soft); }
+.btn-chat-v2.active:disabled { opacity: 0.6; pointer-events: none; }
