@@ -50,6 +50,15 @@
             conditions: [],
             showPresentation: false
         },
+        /* Helados: coherente con Postres/Panadería. Antes no existía
+           entrada y caía en DEFAULT (solo "pza"), lo que dejaba la
+           categoría inconsistente respecto a sus hermanas. */
+        'Helados': {
+            units: ['pza', 'orden', 'docena'],
+            showCondition: false,
+            conditions: [],
+            showPresentation: false
+        },
         'Panadería': {
             units: ['pza', 'docena', 'kg'],
             showCondition: false,

@@ -30,6 +30,11 @@
     -webkit-overflow-scrolling: touch;
     padding-bottom: calc(var(--bottom-nav-height) + 100px);
     position: relative;
+    /* FIX header retráctil: evita que el navegador reajuste el
+       scrollTop cuando el header cambia de altura por el hero.
+       Sin esto, el "scroll anchoring" de Chrome/Safari móvil entra
+       en bucle con la transición del hero. */
+    overflow-anchor: none;
 }
 
 /* ---------- Vistas ---------- */
@@ -54,6 +59,8 @@
     top: 0;
     z-index: 10;
     transition: box-shadow var(--duration-fast) var(--ease-smooth);
+    /* FIX header: sin anclaje de scroll en elementos internos. */
+    overflow-anchor: none;
 }
 .home-header.hero-hidden {
     box-shadow: 0 4px 14px rgba(20, 25, 40, 0.08);
@@ -91,8 +98,10 @@
     line-height: 1;
     color: var(--text-primary);
 }
-.brand-pip { color: #A65F37; }
-.brand-go  { color: #2DA657; }
+/* FIX color PipGo: Pip = naranja principal · Go = verde existente.
+   Se reutilizan las variables de identidad para no duplicar paleta. */
+.brand-pip { color: var(--primary); }
+.brand-go  { color: var(--accent); }
 
 .location-chip {
     display: inline-flex; align-items: center; gap: 5px;
@@ -125,6 +134,9 @@
         transform 0.35s var(--ease-smooth),
         margin-bottom 0.35s var(--ease-smooth);
     transform-origin: top;
+    /* FIX header: ni el hero ni sus hijos participan del anclaje. */
+    overflow-anchor: none;
+    will-change: max-height, opacity, transform;
 }
 .home-header.hero-hidden .home-hero {
     max-height: 0;

@@ -642,10 +642,16 @@
         renderSearchResults(AppState.currentPublications);
     }
 
+    /* FIX Search:
+       Antes onEnterSearch solo refrescaba chips y categorías, pero
+       dejaba el grid de resultados con contenido desincronizado
+       respecto al filtro activo. Ahora se renderiza SIEMPRE con
+       getFilteredList() para que el estado y la vista coincidan. */
     function onEnterSearch() {
         renderCategoriesScroll();
         renderFilterChips();
         updateFilterBadge();
+        renderSearchResults(getFilteredList());
     }
 
     function onEnterHome() {
@@ -1748,14 +1754,12 @@
         sheetCategory.textContent = product.category || 'Producto';
         sheetName.textContent = product.name || '';
 
-        // === Identidad del vendedor ===
         if (sheetSellerBlock) {
             sheetSellerBlock.classList.remove('hidden');
             sheetSellerAvatar.innerHTML = '<i class="fa-solid fa-user"></i>';
             sheetSellerUsername.textContent = '@…';
             sheetSellerBlock.dataset.uid = product.userId || '';
 
-            // Fast path: si ya viene en la publicación
             if (product.sellerUsername || product.sellerAvatarUrl) {
                 if (product.sellerAvatarUrl) {
                     sheetSellerAvatar.innerHTML =
@@ -1765,10 +1769,8 @@
                     ? '@' + product.sellerUsername
                     : '@usuario';
             } else if (window.SellerProfileService && product.userId) {
-                // Fallback: leer perfilesPublicos/{uid} con cache
                 SellerProfileService.resolveIdentity(product).then(identity => {
                     if (!identity) {
-                        // Sin identidad pública, ocultamos el bloque
                         sheetSellerBlock.classList.add('hidden');
                         return;
                     }
@@ -2460,7 +2462,6 @@
             });
         }
 
-        // === Bloque vendedor dentro del sheet: abre SellerProfileUI ===
         if (sheetSellerBlock) {
             sheetSellerBlock.addEventListener('click', () => {
                 const uid = sheetSellerBlock.dataset.uid;
@@ -2470,18 +2471,15 @@
             });
         }
 
-        // === Botón "Mensaje" del Product Sheet → abre chat con contexto ===
         btnChatV2.addEventListener('click', async () => {
             const pub = AppState.currentProduct;
             if (!pub || !pub.userId) return;
 
-            // No permitir chatear contigo mismo
             if (AppState.currentUser && pub.userId === AppState.currentUser.uid) {
                 Toast.warning('Esta es tu propia publicación.');
                 return;
             }
 
-            // Just-in-time auth
             if (!AppState.currentUser) {
                 AppState.pendingAction = {
                     type: 'openChatWith',
@@ -2494,7 +2492,6 @@
                 return;
             }
 
-            // Mostrar transición intencional
             const originalHtml = btnChatV2.innerHTML;
             btnChatV2.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Abriendo conversación…';
             btnChatV2.disabled = true;
@@ -2558,6 +2555,9 @@
         openEditForm,
         deletePublication,
         resetFormMode,
+        /* FIX Search: se expone para que app.js (pull-to-refresh)
+           pueda pedir la lista ya filtrada sin romper el filtro activo. */
+        getFilteredList,
         isProductSheetOpen: () => isSheetOpen,
         isLightboxOpen,
         isFilterModalOpen,
