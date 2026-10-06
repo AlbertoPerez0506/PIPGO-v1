@@ -77,6 +77,9 @@
     }
 
     function closeAllOverlays() {
+        if (window.LegalUI && LegalUI.isOpen && LegalUI.isOpen()) {
+            LegalUI.close(true); return true;
+        }
         if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
             MessagingUI.closeChat(); return true;
         }
@@ -115,8 +118,10 @@
     }
 
     function onBackButton(e) {
-        // Orden por z-index del overlay más alto primero.
-        // El perfil del vendedor puede estar SOBRE el chat (z 260 > 250).
+        // Overlay más alto primero (por z-index).
+        if (window.LegalUI && LegalUI.isOpen && LegalUI.isOpen()) {
+            e.preventDefault(); LegalUI.close(); return;
+        }
         if (window.SellerProfileUI && SellerProfileUI.isOpen && SellerProfileUI.isOpen()) {
             e.preventDefault(); SellerProfileUI.close(); return;
         }
@@ -152,14 +157,17 @@
     }
 
     function handlePopState(event) {
-        // Suppression: cuando un overlay cierra con history.back() y no
+        // Suppression: un overlay cerró con history.back() y no
         // quiere que el popstate cierre el overlay que está debajo.
         if (PublicationUI.consumeSuppressPopstate && PublicationUI.consumeSuppressPopstate()) return;
         if (window.MessagingUI && MessagingUI.consumeSuppressPopstate && MessagingUI.consumeSuppressPopstate()) return;
         if (window.SellerProfileUI && SellerProfileUI.consumeSuppressPopstate && SellerProfileUI.consumeSuppressPopstate()) return;
+        if (window.LegalUI && LegalUI.consumeSuppressPopstate && LegalUI.consumeSuppressPopstate()) return;
 
-        // Orden por z-index: el overlay más alto primero.
-        // SellerProfileUI (260) está por encima de MessagingUI (250).
+        // Overlay más alto primero (por z-index).
+        if (window.LegalUI && LegalUI.isOpen && LegalUI.isOpen()) {
+            LegalUI.close(false); return;
+        }
         if (window.SellerProfileUI && SellerProfileUI.isOpen && SellerProfileUI.isOpen()) {
             SellerProfileUI.close(false); return;
         }

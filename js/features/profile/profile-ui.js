@@ -1,6 +1,7 @@
 /* =====================================================
    PIPGO · PROFILE UI
    Perfil + Ajustes + edición inline de username.
+   Incluye accesos a Aviso de Privacidad y Términos.
    ===================================================== */
 
 (function () {
@@ -10,10 +11,6 @@
     let soldPublications = [];
     let initialized = false;
 
-    /* FIX: token de cancelación para renders concurrentes.
-       Cada llamada a renderProfile incrementa el token y
-       las operaciones asíncronas verifican que sigan siendo
-       el render "vigente" antes de tocar el DOM. */
     let renderToken = 0;
 
     let activeProfileTab = 'own';
@@ -53,7 +50,7 @@
     }
 
     /* -----------------------------------------------------
-       LOGIN PROMPT — rediseñado
+       LOGIN PROMPT
        ----------------------------------------------------- */
     function renderLoginPrompt() {
         if (!profileContent) return;
@@ -215,14 +212,12 @@
 
     /* =====================================================
        RENDER PRINCIPAL
-       FIX: token-based cancellation + try/catch defensivo.
        ===================================================== */
     async function renderProfile() {
         if (!profileContent) return;
 
         const token = ++renderToken;
 
-        // Caso sin sesión: render inmediato y salir.
         if (!AppState.currentUser) {
             renderLoginPrompt();
             return;
@@ -246,7 +241,6 @@
         try {
             let profile = await UserService.getProfile(uid);
 
-            // Otro render empezó mientras tanto → abortar silenciosamente.
             if (token !== renderToken) return;
 
             if (!profile) {
@@ -753,6 +747,29 @@
             </div>
 
             <div class="settings-group">
+                <span class="settings-group-title">Legal</span>
+                <div class="settings-group-card">
+                    <div class="settings-row legal-row" id="settings-open-privacy" role="button" tabindex="0">
+                        <div class="s-icon tone-green"><i class="fa-solid fa-user-shield"></i></div>
+                        <div class="s-text">
+                            <span class="s-label">Aviso de Privacidad</span>
+                            <span class="s-value">Tratamiento de tus datos personales</span>
+                        </div>
+                        <span class="legal-badge-version"><i class="fa-solid fa-check"></i> Aceptado</span>
+                        <i class="fa-solid fa-chevron-right settings-arrow"></i>
+                    </div>
+                    <div class="settings-row legal-row" id="settings-open-terms" role="button" tabindex="0">
+                        <div class="s-icon tone-coffee"><i class="fa-solid fa-file-contract"></i></div>
+                        <div class="s-text">
+                            <span class="s-label">Términos y Condiciones</span>
+                            <span class="s-value">Reglas de uso de PipGo</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right settings-arrow"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-group">
                 <span class="settings-group-title">Sesión</span>
                 <div class="settings-group-card">
                     <button class="btn-logout-pro" id="btn-logout-pro" type="button">
@@ -796,6 +813,36 @@
                     Toast.success('Sesión cerrada.');
                 } catch (e) {
                     Toast.error('No pudimos cerrar la sesión.');
+                }
+            });
+        }
+
+        // Listeners legales
+        const openPrivacy = document.getElementById('settings-open-privacy');
+        const openTerms = document.getElementById('settings-open-terms');
+
+        const launchLegal = (tab) => {
+            closeSettings();
+            setTimeout(() => {
+                if (window.LegalUI) LegalUI.open(tab);
+            }, 180);
+        };
+
+        if (openPrivacy) {
+            openPrivacy.addEventListener('click', () => launchLegal('privacy'));
+            openPrivacy.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    launchLegal('privacy');
+                }
+            });
+        }
+        if (openTerms) {
+            openTerms.addEventListener('click', () => launchLegal('terms'));
+            openTerms.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    launchLegal('terms');
                 }
             });
         }

@@ -16,6 +16,7 @@
         AdminUI.init();
         SellerProfileUI.init();
         MessagingUI.init();
+        LegalUI.init();
     }
 
     function getTimeGreeting() {
@@ -97,15 +98,6 @@
 
     /* =====================================================
        HEADER RETRÁCTIL — versión estable para móvil
-       -----------------------------------------------------
-       Cambios respecto a la versión anterior:
-       1. Umbral ACUMULADO (18px) en lugar de delta por frame.
-       2. Reset del acumulador cuando cambia la dirección.
-       3. Bloqueo de 260ms tras cada cambio de estado, para
-          no reaccionar al reflow que dispara la transición.
-       4. Resincronización de lastY al desbloquear.
-       5. En combinación con overflow-anchor: none en
-          .main-content, se elimina el feedback layout→scroll.
        ===================================================== */
     function initHomeHeaderScroll() {
         const main = document.getElementById('main-content');
@@ -113,9 +105,9 @@
         const hero = document.getElementById('home-hero');
         if (!main || !header || !hero) return;
 
-        const DELTA_THRESHOLD   = 18;   // px acumulados para cambiar de estado
-        const MIN_Y             = 80;   // no ocultar cerca del top
-        const TRANSITION_LOCK_MS = 260; // ms de bloqueo tras un toggle
+        const DELTA_THRESHOLD   = 18;
+        const MIN_Y             = 80;
+        const TRANSITION_LOCK_MS = 260;
 
         let lastY = main.scrollTop;
         let accumulated = 0;
@@ -128,8 +120,6 @@
             clearTimeout(lockTimer);
             lockTimer = setTimeout(() => {
                 locked = false;
-                // El layout cambió durante la transición; re-sincronizamos
-                // lastY con el scrollTop actual para no contar como delta.
                 lastY = main.scrollTop;
                 accumulated = 0;
             }, TRANSITION_LOCK_MS);
@@ -158,7 +148,6 @@
 
                 const y = main.scrollTop;
 
-                // Fuera de Home → siempre visible, sin acumular.
                 if (AppState.currentView !== 'home') {
                     if (header.classList.contains('hero-hidden')) {
                         header.classList.remove('hero-hidden');
@@ -168,7 +157,6 @@
                     return;
                 }
 
-                // Cerca del top → siempre visible.
                 if (y <= 8) {
                     accumulated = 0;
                     if (header.classList.contains('hero-hidden')) {
@@ -181,10 +169,8 @@
                 const delta = y - lastY;
                 lastY = y;
 
-                // Durante el bloqueo no decidimos nada, solo registramos y.
                 if (locked) return;
 
-                // Si la dirección cambia, reiniciamos la cuenta acumulada.
                 if ((accumulated > 0 && delta < 0) || (accumulated < 0 && delta > 0)) {
                     accumulated = 0;
                 }
@@ -260,9 +246,6 @@
                         const pubs = await PublicationService.getActivePublications();
                         AppState.currentPublications = pubs;
                         PublicationUI.onEnterSearch();
-                        // FIX: respetar el filtro activo en Search. Antes se
-                        // pasaba AppState.currentPublications sin filtrar, y
-                        // eso mostraba categorías que el usuario había excluido.
                         const filtered = (typeof PublicationUI.getFilteredList === 'function')
                             ? PublicationUI.getFilteredList()
                             : AppState.currentPublications;
@@ -389,6 +372,9 @@
             }
             if (window.ProfileUI && ProfileUI.isSettingsModalOpen && ProfileUI.isSettingsModalOpen()) {
                 e.preventDefault(); ProfileUI.closeSettings(); return;
+            }
+            if (window.LegalUI && LegalUI.isOpen && LegalUI.isOpen()) {
+                e.preventDefault(); LegalUI.close(); return;
             }
 
             ['draft-modal', 'seller-modal'].forEach(id => {

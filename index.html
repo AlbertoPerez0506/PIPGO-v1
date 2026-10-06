@@ -31,6 +31,7 @@
     <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 
     <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/pages/legal.css">
 </head>
 <body>
 
@@ -731,6 +732,18 @@
                         </div>
                     </div>
 
+                    <!-- Checkbox de aceptación legal -->
+                    <label class="auth-legal-check" id="register-legal-wrap">
+                        <input type="checkbox" id="register-accept-legal">
+                        <span class="legal-check-text">
+                            He leído y acepto los
+                            <button type="button" class="legal-link" data-legal-open="terms">Términos y Condiciones</button>
+                            y el
+                            <button type="button" class="legal-link" data-legal-open="privacy">Aviso de Privacidad</button>
+                            de PipGo.
+                        </span>
+                    </label>
+
                     <button type="submit" class="btn-primary btn-large auth-submit">
                         <i class="fa-solid fa-user-plus"></i> Crear cuenta
                     </button>
@@ -765,6 +778,40 @@
 
                 <div id="auth-error" class="form-error hidden"></div>
                 <div id="auth-success" class="form-success hidden"></div>
+            </div>
+        </div>
+
+        <!-- ============ MODAL LEGAL (Aviso de Privacidad + Términos) ============ -->
+        <div id="legal-modal" class="modal-backdrop hidden">
+            <div class="legal-modal-pro">
+                <header class="legal-header">
+                    <button class="legal-close" id="legal-close" aria-label="Cerrar">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <div class="legal-header-icon variant-privacy" id="legal-header-icon">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <h2 class="legal-header-title" id="legal-title">Aviso de Privacidad</h2>
+                    <p class="legal-header-subtitle" id="legal-subtitle">Tratamiento de datos personales</p>
+                </header>
+
+                <div class="legal-tabs" id="legal-tabs">
+                    <button class="legal-tab active" data-legal-tab="privacy" type="button">
+                        <i class="fa-solid fa-user-shield"></i> Privacidad
+                    </button>
+                    <button class="legal-tab" data-legal-tab="terms" type="button">
+                        <i class="fa-solid fa-file-contract"></i> Términos
+                    </button>
+                </div>
+
+                <div class="legal-body" id="legal-body"></div>
+
+                <footer class="legal-footer">
+                    <p class="legal-updated" id="legal-updated"></p>
+                    <button class="btn-primary" id="legal-accept" type="button">
+                        <i class="fa-solid fa-check"></i> Entendido
+                    </button>
+                </footer>
             </div>
         </div>
 
@@ -990,6 +1037,9 @@
 <!-- SellerProfileUI antes que MessagingUI (MessagingUI puede abrirlo) -->
 <script src="js/features/seller-profile/seller-profile-ui.js"></script>
 <script src="js/features/messaging/messaging-ui.js"></script>
+
+<!-- ============ LEGAL (antes de app.js) ============ -->
+<script src="js/features/legal/legal-ui.js"></script>
 
 <!-- ============ BOOTSTRAP ============ -->
 <script src="js/app.js"></script>

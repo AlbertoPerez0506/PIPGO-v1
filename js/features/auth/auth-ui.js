@@ -1,6 +1,7 @@
 /* =====================================================
    PIPGO · AUTH UI
    Login + Registro + Recuperar contraseña.
+   Incluye aceptación legal obligatoria en el registro.
    ===================================================== */
 
 (function () {
@@ -11,6 +12,7 @@
     let loginEmailInput, loginPasswordInput;
     let loginSubmitBtn, registerSubmitBtn;
     let registerUsernameInput, registerEmailInput, registerPasswordInput;
+    let registerAcceptLegal, registerLegalWrap;
     let recoverEmailInput;
     let initialized = false;
 
@@ -93,6 +95,11 @@
         }
     }
 
+    function resetLegalCheckbox() {
+        if (registerAcceptLegal) registerAcceptLegal.checked = false;
+        if (registerLegalWrap) registerLegalWrap.classList.remove('error');
+    }
+
     /* ---------- Vistas ---------- */
     function showLoginView() {
         authTabsWrap.classList.remove('hidden');
@@ -102,6 +109,7 @@
         recoverView.classList.add('hidden');
         setHeroVariant('login');
         clearMessages();
+        resetLegalCheckbox();
     }
 
     function showRegisterView() {
@@ -112,6 +120,7 @@
         recoverView.classList.add('hidden');
         setHeroVariant('register');
         clearMessages();
+        resetLegalCheckbox();
     }
 
     function showRecoverView() {
@@ -144,12 +153,9 @@
         clearMessages();
         if (loginPasswordInput) loginPasswordInput.value = '';
         if (registerPasswordInput) registerPasswordInput.value = '';
+        resetLegalCheckbox();
     }
 
-    /**
-     * Espera a que AppState.currentUser esté listo (el observer de
-     * auth en app.js lo setea). Timeout máximo.
-     */
     function waitForAuthState(timeoutMs) {
         return new Promise((resolve) => {
             const start = Date.now();
@@ -172,17 +178,26 @@
         const password = registerPasswordInput.value;
         clearMessages();
 
+        // Validar aceptación legal ANTES de enviar
+        if (registerLegalWrap) registerLegalWrap.classList.remove('error');
+        if (!registerAcceptLegal || !registerAcceptLegal.checked) {
+            if (registerLegalWrap) registerLegalWrap.classList.add('error');
+            showError('Debes aceptar los Términos y Condiciones y el Aviso de Privacidad para crear tu cuenta.');
+            return;
+        }
+
         setButtonLoading(registerSubmitBtn, true);
 
         try {
             await AuthService.register({ username, email, password });
+
+            // Marcar la versión legal aceptada
+            if (window.LegalUI) LegalUI.markAccepted();
+
             await waitForAuthState(2500);
             closeAuthModal();
             Toast.success('Cuenta creada correctamente.');
 
-            /* Red de seguridad: forzamos un render del perfil
-               por si el observer de Firebase llegó tarde o
-               se rompió algún eslabón intermedio. */
             setTimeout(() => {
                 try {
                     if (window.ProfileUI && ProfileUI.renderProfile) {
@@ -211,14 +226,10 @@
 
         try {
             await AuthService.login(email, password);
-            // Esperar al observer para que el perfil se cargue antes de cerrar.
             await waitForAuthState(2500);
             closeAuthModal();
             Toast.success('Sesión iniciada.');
 
-            /* Red de seguridad: forzamos un render del perfil
-               por si el observer de Firebase llegó tarde o
-               se rompió algún eslabón intermedio. */
             setTimeout(() => {
                 try {
                     if (window.ProfileUI && ProfileUI.renderProfile) {
@@ -298,6 +309,9 @@
         registerPasswordInput = document.getElementById('register-password');
         recoverEmailInput     = document.getElementById('recover-email');
 
+        registerAcceptLegal   = document.getElementById('register-accept-legal');
+        registerLegalWrap     = document.getElementById('register-legal-wrap');
+
         loginSubmitBtn    = loginForm.querySelector('button[type="submit"]');
         registerSubmitBtn = registerForm.querySelector('button[type="submit"]');
 
@@ -323,6 +337,16 @@
 
         document.querySelectorAll('.auth-input-toggle').forEach(btn => {
             btn.addEventListener('click', () => handleTogglePassword(btn));
+        });
+
+        // Enlaces legales dentro del formulario de registro
+        document.querySelectorAll('.legal-link[data-legal-open]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const tab = btn.dataset.legalOpen === 'terms' ? 'terms' : 'privacy';
+                if (window.LegalUI) LegalUI.open(tab);
+            });
         });
 
         if (recoverEmailInput) {
