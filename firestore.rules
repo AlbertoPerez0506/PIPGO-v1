@@ -19,9 +19,11 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/usuarios/$(uid)).data.role == "seller"
         && get(/databases/$(database)/documents/usuarios/$(uid)).data.sellerStatus == "approved";
     }
+    // FIX: ahora se permite la letra ñ (y Ñ). El frontend las acepta
+    // y normaliza a minúsculas antes de guardar el usernameNormalized.
     function validUsername(u) {
       return u is string && u.size() >= 3 && u.size() <= 20
-        && u.matches('^[a-zA-Z0-9._]+$');
+        && u.matches('^[a-zA-Z0-9._ñÑ]+$');
     }
     function usernameNormalizedMatches(u, n) {
       return n is string && n.size() >= 3 && n.size() <= 20 && n == u.lower();
@@ -282,17 +284,6 @@ service cloud.firestore {
 
     // ============================================================
     // CONVERSACIONES + MENSAJES
-    //
-    // FIX CRÍTICO:
-    // Antes, allow read exigía ser participante. Cuando el documento
-    // no existía, resource era null, la expresión fallaba, y Firestore
-    // devolvía permission-denied. Eso rompía getOrCreateConversation
-    // en el get() inicial antes de crear la conversación.
-    //
-    // Ahora permitimos leer cuando resource == null (documento
-    // inexistente) para que el cliente pueda decidir si crear la
-    // conversación. Sigue siendo seguro: solo el participante puede
-    // leer conversaciones que existen.
     // ============================================================
     match /conversaciones/{conversationId} {
 

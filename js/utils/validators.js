@@ -4,6 +4,14 @@
    Mensajes específicos, sin culpar al usuario.
    Los límites viven aquí: fuente única de verdad
    para contadores y validaciones.
+
+   Novedades:
+   - Username acepta ñ/Ñ.
+   - Mensajes de error específicos (espacios,
+     caracteres inválidos, etc.).
+   - validateSchedule robusto: parsea a minutos,
+     acepta 24h y 12h (con AM/PM), permite cualquier
+     combinación mañana/tarde/noche.
    ===================================================== */
 
 window.Validators = {
@@ -27,23 +35,65 @@ window.Validators = {
         SELLER_PHONE_MAX: 30
     },
 
+    /* Caracteres permitidos en username: A-Z, a-z, 0-9, punto, guion bajo,
+       y las letras ñ/Ñ (español). */
+    USERNAME_ALLOWED_REGEX: /^[a-zA-Z0-9._ñÑ]+$/,
+    USERNAME_INVALID_CHARS_REGEX: /[^a-zA-Z0-9._ñÑ]/g,
+
     /* ---------- Username ---------- */
     normalizeUsername(username) {
+        // toLowerCase() en JS respeta ñ/Ñ sin problemas.
         return String(username || '').trim().toLowerCase();
     },
 
     validateUsername(username) {
         const L = this.LIMITS;
-        const value = String(username || '').trim();
+        const raw = String(username == null ? '' : username);
+
+        // 1) Espacios: caso más común y confuso. Mensaje muy explícito.
+        if (/\s/.test(raw)) {
+            const suggestion = raw.trim().replace(/\s+/g, '_');
+            return {
+                valid: false,
+                error: `Los usernames no pueden tener espacios. Prueba con "${suggestion}" o algo parecido.`
+            };
+        }
+
+        const value = raw.trim();
+
+        // 2) Longitud
         if (value.length < L.USERNAME_MIN) {
-            return { valid: false, error: `El username debe tener al menos ${L.USERNAME_MIN} caracteres.` };
+            return {
+                valid: false,
+                error: `El username debe tener al menos ${L.USERNAME_MIN} caracteres.`
+            };
         }
         if (value.length > L.USERNAME_MAX) {
-            return { valid: false, error: `El username no puede superar ${L.USERNAME_MAX} caracteres.` };
+            return {
+                valid: false,
+                error: `El username no puede superar ${L.USERNAME_MAX} caracteres.`
+            };
         }
-        if (!/^[a-zA-Z0-9._]+$/.test(value)) {
-            return { valid: false, error: 'Solo letras, números, "_" y ".". Sin espacios.' };
+
+        // 3) Caracteres inválidos → mostramos cuáles
+        const invalidMatches = value.match(this.USERNAME_INVALID_CHARS_REGEX);
+        if (invalidMatches && invalidMatches.length) {
+            const uniq = [...new Set(invalidMatches)].slice(0, 5);
+            const list = uniq.map(c => `"${c}"`).join(' ');
+            return {
+                valid: false,
+                error: `Caracteres no permitidos: ${list}. Usa solo letras (incluida ñ), números, "_" y ".".`
+            };
         }
+
+        // 4) Regex final (redundante pero por seguridad)
+        if (!this.USERNAME_ALLOWED_REGEX.test(value)) {
+            return {
+                valid: false,
+                error: 'Solo se permiten letras (incluida ñ), números, "_" y ".". Sin espacios.'
+            };
+        }
+
         return { valid: true, value };
     },
 
@@ -149,6 +199,21 @@ window.Validators = {
 
     /* =================================================
        HORARIO — opcional
+       -------------------------------------------------
+       Antes se comparaba "HH:MM" como string. Eso funciona
+       para formato 24h con ceros, pero falla si algún
+       navegador devuelve "8:00" (sin cero) o "2:00 PM".
+
+       Ahora convertimos a minutos y comparamos numérico.
+       Aceptamos cualquier combinación mañana/tarde/noche
+       (2pm-5pm, 11am-2pm, 8am-12pm, etc.). Horarios que
+       cruzan medianoche (22:00 → 02:00) también son
+       válidos.
+
+       Casos inválidos:
+         - Sin días.
+         - Hora vacía o con formato desconocido.
+         - Inicio == fin.
        ================================================= */
     validateSchedule(schedule) {
         if (!schedule) return { valid: true };
@@ -158,10 +223,61 @@ window.Validators = {
         if (!schedule.start || !schedule.end) {
             return { valid: false, error: 'Indica la hora de inicio y de fin.' };
         }
-        if (schedule.start >= schedule.end) {
-            return { valid: false, error: 'La hora de inicio debe ser anterior a la de fin.' };
+
+        const startMin = this._timeToMinutes(schedule.start);
+        const endMin   = this._timeToMinutes(schedule.end);
+
+        if (startMin == null || endMin == null) {
+            return { valid: false, error: 'La hora no tiene un formato válido.' };
         }
+
+        if (startMin === endMin) {
+            return { valid: false, error: 'La hora de inicio y la de fin no pueden ser iguales.' };
+        }
+
+        // Inicio > fin se interpreta como horario nocturno (cruza medianoche).
+        // Es válido.
         return { valid: true };
+    },
+
+    /**
+     * Convierte una hora a minutos desde medianoche.
+     * Acepta:
+     *   "14:00", "14:00:30", "8:00"   → 24h
+     *   "2:30 PM", "02:30PM", "2:30 p.m." → 12h
+     * Devuelve null si no se puede parsear.
+     */
+    _timeToMinutes(value) {
+        if (value == null) return null;
+        const str = String(value).trim();
+        if (!str) return null;
+
+        // 24h: HH:MM o HH:MM:SS (con o sin cero a la izquierda)
+        let m = str.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+        if (m) {
+            const h = parseInt(m[1], 10);
+            const min = parseInt(m[2], 10);
+            if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
+                return h * 60 + min;
+            }
+            return null;
+        }
+
+        // 12h: H:MM AM / H:MM PM (con o sin puntos, con o sin espacio)
+        m = str.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp])\.?\s*[Mm]\.?$/);
+        if (m) {
+            let h = parseInt(m[1], 10);
+            const min = parseInt(m[2], 10);
+            const period = m[3].toUpperCase();
+
+            if (h < 1 || h > 12 || min < 0 || min > 59) return null;
+            if (h === 12) h = 0;
+            if (period === 'P') h += 12;
+
+            return h * 60 + min;
+        }
+
+        return null;
     },
 
     /* =================================================

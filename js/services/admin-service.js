@@ -40,6 +40,12 @@ window.AdminService = {
         };
     },
 
+    /**
+     * MEJORA: en lugar de leer TODA la colección usuarios para
+     * enriquecer cada solicitud, leemos solo los uids relevantes
+     * con un where(documentId() 'in' [...]) en chunks de 10.
+     * Con 10k usuarios esto baja de 10k lecturas a N (tamaño de apps).
+     */
     async listApplications(filter = 'all') {
         let query = db.collection(CONFIG.COLLECTIONS.SELLER_APPLICATIONS);
         if (filter && filter !== 'all') query = query.where('status', '==', filter);
@@ -48,9 +54,23 @@ window.AdminService = {
         const apps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         if (!apps.length) return [];
 
-        const usersSnap = await db.collection(CONFIG.COLLECTIONS.USERS).get();
+        // UIDs únicos (el documento está keyed por uid en este proyecto)
+        const uids = [...new Set(apps.map(a => a.uid || a.id))].filter(Boolean);
         const usersById = {};
-        usersSnap.forEach(u => { usersById[u.id] = u.data(); });
+
+        // Firestore 'in' permite hasta 30 valores; usamos chunks de 10 por seguridad.
+        const CHUNK = 10;
+        for (let i = 0; i < uids.length; i += CHUNK) {
+            const chunk = uids.slice(i, i + CHUNK);
+            try {
+                const usersSnap = await db.collection(CONFIG.COLLECTIONS.USERS)
+                    .where(firebase.firestore.FieldPath.documentId(), 'in', chunk)
+                    .get();
+                usersSnap.forEach(u => { usersById[u.id] = u.data(); });
+            } catch (e) {
+                Logger.warn('Admin listApplications: no se pudo enriquecer un chunk de usuarios', e);
+            }
+        }
 
         const enriched = apps.map(app => {
             const uid = app.uid || app.id;
@@ -72,8 +92,7 @@ window.AdminService = {
     },
 
     /* -------------------------------------------------
-       APROBAR — ahora también replica información
-       pública en perfilesPublicos/{uid}
+       APROBAR — replica información pública en perfilesPublicos/{uid}
        ------------------------------------------------- */
     async approve(uid) {
         if (!this.isAdmin()) throw new Error('FORBIDDEN');
@@ -108,7 +127,6 @@ window.AdminService = {
             { merge: true }
         );
 
-        // Datos públicos del vendedor (destinados a perfilesPublicos)
         batch.set(
             db.collection(CONFIG.COLLECTIONS.PUBLIC_PROFILES).doc(uid),
             {
@@ -181,7 +199,7 @@ window.AdminService = {
         await batch.commit();
     },
 
-    /* ------------- Recuperaciones (sin cambios) ------------- */
+    /* ------------- Recuperaciones ------------- */
 
     async listPasswordResetRequests(filter = 'pending') {
         let query = db.collection('solicitudesRecuperacion');

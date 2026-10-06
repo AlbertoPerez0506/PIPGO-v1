@@ -355,10 +355,17 @@
        ABRIR CHAT
        -----------------------------------------------------
        FIX:
-       - El overlay se abre INMEDIATAMENTE, sin esperar red.
+       - El overlay se abre INMEDIATAMENTE, incluso antes de
+         resolver otherUid si no está en memoria. Antes había
+         que esperar a Firestore cuando la conversación no
+         estaba en el array local, y eso se percibía como que
+         "no abría al primer click".
        - Token de cancelación por si el usuario abre varios
          chats rápido seguidos.
        - NO se hace focus() al input automáticamente.
+       - FIX contextual: si la conversación existe pero está
+         vacía (o el primer intento falló tras crear), el
+         mensaje contextual SÍ se envía.
        ===================================================== */
     async function openChat({ conversationId, otherUid, publicationContext = null, fromPublication = false } = {}) {
         if (!AppState.currentUser) {
@@ -368,28 +375,12 @@
 
         const myToken = ++openChatToken;
 
-        // Resolver otherUid si solo tenemos conversationId.
-        // Normalmente ya viene del listado, así que es sync.
-        let conv = null;
-        if (conversationId) {
-            conv = conversations.find(c => c.id === conversationId) || null;
-            if (!conv) {
-                try {
-                    conv = await ConversationService.getConversation(conversationId);
-                } catch (e) { conv = null; }
-            }
-            if (myToken !== openChatToken) return;
-            if (conv) otherUid = otherUid || ConversationService.otherParticipantId(conv, AppState.currentUser.uid);
-        }
-
-        if (!otherUid) { Toast.error('No pudimos abrir la conversación.'); return; }
-
         // Cerrar pickers/menús previos
         closeEmojiPicker();
         closeMessageMenu();
 
-        // Reset estado del chat
-        currentChat.otherUid = otherUid;
+        // Reset estado del chat con lo que ya sabemos (sync)
+        currentChat.otherUid = otherUid || null;
         currentChat.publicationContext = publicationContext;
         currentChat.messages = [];
         currentChat.oldestCreatedAt = null;
@@ -406,12 +397,42 @@
         renderChatHeader();
         newMessagesEl.classList.add('hidden');
 
-        // Mostrar overlay YA — sin esperar red
+        // *** CRÍTICO: mostrar el overlay YA, sin ningún await previo ***
         openOverlay();
-
         if (window.HapticsService) HapticsService.light();
 
-        // Cargar perfil del vendedor (sin bloquear la apertura)
+        // -----------------------------------------------------
+        // A partir de aquí todo es asíncrono y NO bloquea la UI.
+        // -----------------------------------------------------
+
+        // Resolver otherUid si no lo tenemos (fallback).
+        if (!otherUid && conversationId) {
+            const local = conversations.find(c => c.id === conversationId);
+            if (local) {
+                otherUid = ConversationService.otherParticipantId(local, AppState.currentUser.uid);
+            } else {
+                try {
+                    const fetched = await ConversationService.getConversation(conversationId);
+                    if (myToken !== openChatToken) return;
+                    if (fetched) {
+                        otherUid = ConversationService.otherParticipantId(fetched, AppState.currentUser.uid);
+                    }
+                } catch (e) { /* silent */ }
+            }
+            if (myToken !== openChatToken) return;
+            if (otherUid) {
+                currentChat.otherUid = otherUid;
+                renderChatHeader();
+            }
+        }
+
+        if (!otherUid) {
+            Toast.error('No pudimos abrir la conversación.');
+            if (myToken === openChatToken) closeOverlay();
+            return;
+        }
+
+        // Cargar perfil del vendedor (background)
         if (window.SellerProfileService && otherUid) {
             try {
                 const profile = await SellerProfileService.getPublicProfile(otherUid);
@@ -434,9 +455,19 @@
                 if (myToken !== openChatToken) return;
                 currentChat.conversationId = conversation.id;
 
-                // Mensaje contextual: solo si venimos desde publicación
-                // Y es la primera vez que se crea la conversación.
-                if (fromPublication && created && publicationContext && publicationContext.id && publicationContext.name) {
+                // FIX: retry del mensaje contextual.
+                // Antes solo se enviaba si `created === true`. Si el
+                // primer intento creaba la conversación pero fallaba
+                // al mandar el mensaje (red lenta, cierre de app),
+                // el reintento veía `created === false` y nunca lo
+                // enviaba. Ahora también se envía si la conversación
+                // está vacía (`!lastMessage`), cubriendo ambos casos:
+                //   - creada ahora por primera vez, o
+                //   - creada antes pero sin mensajes.
+                const conversationIsEmpty = created || !conversation.lastMessage;
+
+                if (fromPublication && conversationIsEmpty &&
+                    publicationContext && publicationContext.id && publicationContext.name) {
                     try {
                         await MessageService.sendMessage(conversation.id, {
                             senderId: AppState.currentUser.uid,
@@ -796,10 +827,9 @@
         renderEmojiTabs();
         renderEmojiCategory(currentEmojiCategory);
 
-        // Click en tabs
-        // FIX: no re-renderizar innerHTML (destruye el target). En su
-        // lugar, togglear la clase active. Además stopPropagation para
-        // que el handler global de "click fuera" no cierre el picker.
+        // Click en tabs — NO re-renderizamos innerHTML para no
+        // perder la referencia del target (bug de "click fuera"
+        // que cerraba el picker al cambiar categoría).
         emojiTabs.addEventListener('click', (e) => {
             e.stopPropagation();
             const btn = e.target.closest('[data-cat]');
@@ -813,8 +843,7 @@
             renderEmojiCategory(currentEmojiCategory);
         });
 
-        // Click en emoji → insertar
-        // FIX: stopPropagation para que el handler global no cierre el picker.
+        // Click en emoji
         emojiScroll.addEventListener('click', (e) => {
             e.stopPropagation();
             const cell = e.target.closest('[data-emoji]');
@@ -836,12 +865,32 @@
             closeEmojiPicker();
         });
 
-        // Cerrar cuando el input recibe foco (usuario toca el textarea)
+        // Si el input recibe foco (usuario toca el textarea),
+        // cerramos el picker para ceder el espacio al teclado.
         inputEl.addEventListener('focus', () => {
             if (!emojiPicker.classList.contains('hidden')) {
                 closeEmojiPicker();
             }
         });
+
+        // Sincronización con el teclado virtual (móvil):
+        // si el teclado se abre por cualquier razón y el picker
+        // está abierto, lo cerramos para no encimarse.
+        if (window.visualViewport) {
+            const onVVResize = () => {
+                const vv = window.visualViewport;
+                const keyboardOpen = vv.height < window.innerHeight - 150;
+                if (keyboardOpen && !emojiPicker.classList.contains('hidden')) {
+                    // Nota: no llamamos a inputEl.blur() aquí para no
+                    // entrar en bucle con el focus del textarea.
+                    emojiPicker.classList.add('hidden');
+                    emojiBtn.classList.remove('active');
+                    overlay.classList.remove('emoji-open');
+                    updateEmojiBtnIcon();
+                }
+            };
+            window.visualViewport.addEventListener('resize', onVVResize);
+        }
     }
 
     function renderEmojiTabs() {
@@ -903,9 +952,6 @@
         recentEmojis = [emoji, ...recentEmojis.filter(e => e !== emoji)].slice(0, 24);
         Storage.set('msg_recent_emojis', recentEmojis);
 
-        // Si acaba de aparecer la primera reciente, renderizar tabs
-        // (para añadir la pestaña de recientes), sino solo la lista
-        // si el usuario está viendo recientes.
         if (wasEmptyRecents) {
             renderEmojiTabs();
         }
@@ -927,12 +973,12 @@
     function openEmojiPicker() {
         closeMessageMenu();
 
+        // Guardar posición del cursor antes de perder el foco
         if (document.activeElement === inputEl) {
             currentChat._savedSelection = {
                 start: inputEl.selectionStart,
                 end: inputEl.selectionEnd
             };
-            inputEl.blur();
         } else if (!currentChat._savedSelection) {
             currentChat._savedSelection = {
                 start: inputEl.value.length,
@@ -940,13 +986,19 @@
             };
         }
 
+        // Cerrar teclado virtual (estilo WhatsApp: los emojis
+        // ocupan el espacio del teclado).
+        inputEl.blur();
+
+        // Mostrar el picker
         emojiPicker.classList.remove('hidden');
         emojiBtn.classList.add('active');
         overlay.classList.add('emoji-open');
         updateEmojiBtnIcon();
 
+        // Mantener el chat cerca del fondo si el usuario ya estaba ahí
         if (isNearBottom(messagesEl, 120)) {
-            setTimeout(() => scrollToBottom('auto'), 60);
+            requestAnimationFrame(() => scrollToBottom('auto'));
         }
     }
 
@@ -992,6 +1044,12 @@
         inputEl.value = '';
         currentChat._savedSelection = null;
         autoResizeInput();
+
+        // Cerrar el picker al enviar (evita que quede abierto
+        // encima de la lista de mensajes tras enviar).
+        if (!emojiPicker.classList.contains('hidden')) {
+            closeEmojiPicker();
+        }
 
         try {
             await MessageService.sendMessage(currentChat.conversationId, {
@@ -1101,8 +1159,7 @@
             sellerInfoBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                // Cerrar emoji picker si estaba abierto; así el sheet
-                // del perfil queda limpio encima.
+                // Cerrar pickers/menús para que el sheet se vea limpio
                 closeEmojiPicker();
                 closeMessageMenu();
                 if (openingSellerProfile) return;

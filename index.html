@@ -6,7 +6,7 @@
     <meta name="format-detection" content="telephone=no">
     <meta name="theme-color" content="#F2F2F2">
     <title>PipGo</title>
-    <link rel="icon" href="/resources/android/icon.png" type="image/png">
+    <link rel="icon" href="/assets/android/icon.png" type="image/png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
 <body>
 
 <div id="pipgo-splash">
-    <img src="/Splahs.jpg" alt="PipGo">
+    <img src="/assets/android/Splahs.jpg" alt="PipGo">
 </div>
 
 <div id="app">
@@ -49,7 +49,7 @@
                     <div class="topbar">
                         <div class="brand-group">
                             <div class="logo-badge">
-                                <img src="/logo_go.png" alt="PipGo" class="logo-image">
+                                <img src="/assets/android/logo_go.png" alt="PipGo" class="logo-image">
                             </div>
                             <div class="brand-text">
                                 <h1><span class="brand-pip">Pip</span><span class="brand-go">Go</span></h1>
@@ -448,6 +448,7 @@
                             <input type="time" id="schedule-end" value="12:00">
                         </div>
                     </div>
+                    <p class="form-hint">Puedes usar cualquier hora, mañana o tarde. Ej. 14:00 a 17:00.</p>
                     <button type="button" class="btn-clear-schedule hidden" id="btn-clear-schedule">
                         <i class="fa-solid fa-trash"></i> Quitar horario
                     </button>
@@ -706,7 +707,7 @@
                             <input type="text" id="register-username" autocomplete="username"
                                 placeholder="Username" minlength="3" maxlength="20" required>
                         </div>
-                        <p class="auth-field-hint">Solo letras, números, "_" y "."</p>
+                        <p class="auth-field-hint">Letras (incluida ñ), números, "_" y ".". Sin espacios.</p>
                     </div>
 
                     <div class="auth-field">
