@@ -61,7 +61,14 @@
     let previewHistoryPushed = false;
     let suppressPopstate = false;
 
-    /* Filtros */
+    /* Filtros
+       -----------------------------------------------------
+       activeFilterCategory / activeFilterSeller son EXCLUSIVOS
+       de la vista Search. El Home tiene su propio filtro en
+       AppState.activeCategoryFilter. Antes se sincronizaban a
+       la fuerza, lo que hacía que un filtro de Home apareciera
+       aplicado en Search sin que el usuario lo pidiera (y
+       viceversa). Ahora son independientes. */
     let filterModal, filterClose, filterApply, filterCategory, filterSeller;
     let activeFilterCategory = '';
     let activeFilterSeller = '';
@@ -73,9 +80,15 @@
     let lbPointers = new Map();
     let lbPinchStart = 0, lbPinchScale = 1, lbCurrentScale = 1, lbActiveImg = null;
 
-    /* Realtime Home */
+    /* Realtime Home
+       -----------------------------------------------------
+       homeIsFirstSnapshotOfSubscription: true justo tras abrir
+       una nueva suscripción. El primer snapshot se aplica como
+       "reset" silencioso (reemplaza la lista) para no interpretar
+       los docs existentes como "nuevas publicaciones" ni mostrar
+       el banner de novedades al volver desde otra vista. */
     let homeUnsubscribe = null;
-    let homeFirstSnapshotHandled = false;
+    let homeIsFirstSnapshotOfSubscription = false;
     let pendingHomePublications = [];
 
     /* Búsqueda */
@@ -300,7 +313,12 @@
             renderSkeletons(productsGrid, 6);
         }
 
-        homeFirstSnapshotHandled = false;
+        // Marcamos este inicio de suscripción para tratar el primer
+        // snapshot como reset silencioso. Esto evita:
+        //   - duplicar publicaciones ya en memoria,
+        //   - mostrar el banner "N nuevas" con docs existentes,
+        //   - perder el orden por createdAt.
+        homeIsFirstSnapshotOfSubscription = true;
 
         homeUnsubscribe = PublicationService.subscribeActivePublications(
             (changes, snapshot) => handleHomeSnapshot(changes, snapshot),
@@ -326,13 +344,17 @@
             homeUnsubscribe = null;
         }
         AppState.homeSubscription = null;
-        homeFirstSnapshotHandled = false;
+        // No tocamos homeIsFirstSnapshotOfSubscription aquí: se reinicia
+        // en startHomeSubscription, no al salir de Home. Así, si el
+        // usuario vuelve, el primer snapshot sigue siendo un reset
+        // silencioso.
         hideHomeNewBanner();
     }
 
     function handleHomeSnapshot(changes, snapshot) {
-        if (!homeFirstSnapshotHandled) {
-            homeFirstSnapshotHandled = true;
+        // Primer snapshot tras abrir la suscripción → reemplazo silencioso.
+        if (homeIsFirstSnapshotOfSubscription) {
+            homeIsFirstSnapshotOfSubscription = false;
             const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             AppState.currentPublications = all;
             rerenderHome();
@@ -571,25 +593,27 @@
         } else if (actionId === 'empty-clear-filters') {
             const b = document.getElementById(actionId);
             if (b) b.addEventListener('click', () => {
+                // "Limpiar filtros" se muestra en Search → solo toca el
+                // estado de Search. El filtro del Home queda intacto
+                // porque son carriles independientes.
                 activeFilterCategory = '';
-                AppState.activeCategoryFilter = '';
                 activeFilterSeller = '';
                 if (searchInput) searchInput.value = '';
                 if (clearSearch) clearSearch.classList.remove('visible');
                 renderCategoriesScroll();
                 renderFilterChips();
                 updateFilterBadge();
-                renderHomeFilters(AppState.currentPublications);
                 renderSearchResults(AppState.currentPublications);
             });
         } else if (actionId === 'empty-show-all') {
             const b = document.getElementById(actionId);
             if (b) b.addEventListener('click', () => {
+                // "Ver todas" desde el estado vacío de una categoría
+                // en Home → limpia SOLO el filtro de Home. Search
+                // conserva el suyo.
                 AppState.activeCategoryFilter = '';
-                activeFilterCategory = '';
                 renderHomeFilters(AppState.currentPublications);
                 renderCategoriesScroll();
-                updateFilterBadge();
                 rerenderHome();
             });
         } else if (actionId === 'empty-go-publish') {
@@ -630,14 +654,18 @@
     }
 
     function showAllPublications() {
+        // Este botón vive en el header del Home ("Ver todos" →
+        // nos lleva a Search mostrando todo). Resetea AMBOS filtros
+        // porque la intención es "ver el catálogo completo".
         searchInput.value = '';
         clearSearch.classList.remove('visible');
         searchSuggestions.style.display = 'block';
         activeFilterCategory = '';
-        AppState.activeCategoryFilter = '';
         activeFilterSeller = '';
+        AppState.activeCategoryFilter = '';
         renderFilterChips();
         renderCategoriesScroll();
+        renderHomeFilters(AppState.currentPublications);
         updateFilterBadge();
         renderSearchResults(AppState.currentPublications);
     }
@@ -708,8 +736,9 @@
     }
 
     function onHomeFilterClick(cat) {
+        // Solo afecta el filtro de Home. Search mantiene su propio
+        // activeFilterCategory sin verse tocado por este click.
         AppState.activeCategoryFilter = cat || '';
-        activeFilterCategory = cat || '';
 
         document.querySelectorAll('#home-filter-chips .home-filter-chip').forEach(c => {
             const isActive = (c.dataset.cat || '') === (cat || '');
@@ -721,13 +750,6 @@
             ? AppState.currentPublications.filter(p => p.category === AppState.activeCategoryFilter)
             : AppState.currentPublications;
         renderProducts(productsGrid, list);
-        updateFilterBadge();
-
-        if (AppState.currentView === 'search') {
-            renderCategoriesScroll();
-            renderFilterChips();
-            renderSearchResults(getFilteredList());
-        }
     }
 
     function renderCategoriesScroll() {
@@ -741,7 +763,6 @@
         allBtn.innerHTML = '<i class="fa-solid fa-border-all pill-ico"></i> Todas';
         allBtn.addEventListener('click', () => {
             activeFilterCategory = '';
-            AppState.activeCategoryFilter = '';
             renderCategoriesScroll();
             renderSearchResults(getFilteredList());
             renderFilterChips();
@@ -755,7 +776,6 @@
             btn.textContent = cat;
             btn.addEventListener('click', () => {
                 activeFilterCategory = cat;
-                AppState.activeCategoryFilter = cat;
                 renderCategoriesScroll();
                 renderSearchResults(getFilteredList());
                 renderFilterChips();
@@ -822,8 +842,9 @@
     function isFilterModalOpen() { return !filterModal.classList.contains('hidden'); }
 
     function applyFilters() {
+        // El modal de filtros pertenece a Search. Solo toca el estado
+        // de Search; el filtro de Home queda intacto.
         activeFilterCategory = filterCategory.value;
-        AppState.activeCategoryFilter = activeFilterCategory;
         activeFilterSeller = filterSeller.value;
         closeFilterModal();
         renderCategoriesScroll();
@@ -2555,8 +2576,8 @@
         openEditForm,
         deletePublication,
         resetFormMode,
-        /* FIX Search: se expone para que app.js (pull-to-refresh)
-           pueda pedir la lista ya filtrada sin romper el filtro activo. */
+        /* Expuesto para que app.js (pull-to-refresh) pueda pedir la
+           lista ya filtrada sin romper el filtro activo de Search. */
         getFilteredList,
         isProductSheetOpen: () => isSheetOpen,
         isLightboxOpen,
