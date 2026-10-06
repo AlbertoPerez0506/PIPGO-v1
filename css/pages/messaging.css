@@ -1,6 +1,6 @@
 /* =====================================================
    PIPGO · MESSAGING
-   Inbox + chat overlay.
+   Inbox + chat overlay + emoji picker.
    ===================================================== */
 
 /* ---------- Vista Mensajes (inbox) ---------- */
@@ -44,10 +44,28 @@
     transition: background var(--duration-fast);
     position: relative;
     border-bottom: 1px solid var(--border-soft);
+    animation: msgRowIn 0.28s var(--ease-out-expo) backwards;
 }
+.msg-row:nth-child(1) { animation-delay: 0ms; }
+.msg-row:nth-child(2) { animation-delay: 25ms; }
+.msg-row:nth-child(3) { animation-delay: 50ms; }
+.msg-row:nth-child(4) { animation-delay: 75ms; }
+.msg-row:nth-child(5) { animation-delay: 100ms; }
 .msg-row:last-child { border-bottom: none; }
-.msg-row:active { background: var(--surface-secondary); }
+.msg-row:active { background: var(--surface-secondary); transform: scale(0.99); }
 .msg-row.unread { background: #F4FBF6; }
+.msg-row.unread::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+}
+
+@keyframes msgRowIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
 
 .msg-avatar {
     width: 46px; height: 46px;
@@ -58,6 +76,14 @@
     overflow: hidden;
     flex-shrink: 0;
     font-size: 16px;
+    position: relative;
+}
+.msg-avatar::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px rgba(45,166,87,0.12);
+    pointer-events: none;
 }
 .msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -73,16 +99,26 @@
 .msg-time {
     font-size: 11.5px; color: var(--text-tertiary);
     flex-shrink: 0;
+    font-weight: 600;
 }
 .msg-preview {
     font-size: 13px; color: var(--text-secondary);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.msg-row.unread .msg-preview {
+    color: var(--text-primary);
+    font-weight: 600;
 }
 .msg-unread-dot {
     position: absolute; right: 10px; bottom: 10px;
     width: 9px; height: 9px; border-radius: 50%;
     background: var(--accent);
     box-shadow: 0 0 0 2px var(--surface);
+    animation: msgUnreadPulse 1.6s ease-in-out infinite;
+}
+@keyframes msgUnreadPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.15); opacity: 0.85; }
 }
 
 /* ---------- Empty ---------- */
@@ -99,6 +135,7 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 28px; color: var(--text-tertiary);
     margin-bottom: 16px;
+    box-shadow: 0 6px 18px rgba(20,25,40,0.04);
 }
 .msg-empty h4 { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
 .msg-empty p { font-size: 13.5px; max-width: 280px; line-height: 1.5; margin-bottom: 16px; }
@@ -144,16 +181,18 @@
     to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ---------- Header ---------- */
 .chat-header {
-    display: flex; align-items: center; gap: 10px;
-    padding: calc(12px + env(safe-area-inset-top)) 12px 12px;
+    display: flex; align-items: center; gap: 8px;
+    padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
     background: var(--surface);
     border-bottom: 1px solid var(--border-soft);
     box-shadow: 0 4px 14px rgba(20, 25, 40, 0.06);
     z-index: 2;
+    flex-shrink: 0;
 }
 .chat-back {
-    width: 40px; height: 40px;
+    width: 42px; height: 42px;
     border-radius: 50%; border: none;
     background: transparent;
     color: var(--text-primary);
@@ -161,8 +200,9 @@
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
     flex-shrink: 0;
+    transition: background 0.15s;
 }
-.chat-back:active { background: var(--bg); }
+.chat-back:active { background: var(--bg); transform: scale(0.92); }
 
 .chat-seller-info {
     flex: 1;
@@ -172,14 +212,17 @@
     cursor: pointer;
     text-align: left;
     font-family: inherit;
-    padding: 4px 6px;
-    border-radius: 12px;
+    padding: 6px 8px;
+    border-radius: 14px;
     min-width: 0;
+    min-height: 52px;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
 }
 .chat-seller-info:active { background: var(--bg); }
 
 .chat-avatar {
-    width: 40px; height: 40px;
+    width: 42px; height: 42px;
     border-radius: 50%;
     background: var(--accent-light);
     color: var(--accent-dark);
@@ -187,19 +230,26 @@
     overflow: hidden;
     flex-shrink: 0;
     font-size: 14px;
+    box-shadow: inset 0 0 0 1.5px rgba(45,166,87,0.12);
+    pointer-events: none;
 }
 .chat-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-.chat-seller-text { display: flex; flex-direction: column; min-width: 0; }
+.chat-seller-text {
+    display: flex; flex-direction: column; min-width: 0;
+    pointer-events: none;
+}
 .chat-seller-username {
-    font-size: 14.5px; font-weight: 800;
+    font-size: 15px; font-weight: 800;
     color: var(--text-primary);
     letter-spacing: -0.2px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .chat-seller-role {
-    font-size: 11.5px; color: var(--text-secondary);
-    font-weight: 600;
+    font-size: 11.5px; color: var(--accent-dark);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
 
 /* ---------- Contexto de publicación ---------- */
@@ -210,6 +260,7 @@
     color: var(--coffee-dark);
     font-size: 12.5px;
     border-bottom: 1px solid var(--border-soft);
+    flex-shrink: 0;
 }
 .chat-context-banner.hidden { display: none; }
 .chat-context-banner strong {
@@ -238,6 +289,7 @@
     display: flex; flex-direction: column; gap: 6px;
     background: var(--bg);
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 .chat-loading {
     display: flex; align-items: center; justify-content: center;
@@ -245,9 +297,19 @@
     color: var(--text-tertiary); font-size: 13px;
 }
 .chat-empty {
-    display: flex; align-items: center; justify-content: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
     flex: 1; color: var(--text-tertiary);
-    font-size: 13px; text-align: center; padding: 20px;
+    font-size: 13px; text-align: center; padding: 20px; gap: 10px;
+}
+.chat-empty-icon {
+    width: 64px; height: 64px;
+    border-radius: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    color: var(--text-tertiary);
+    margin-bottom: 4px;
 }
 
 .chat-day-sep {
@@ -275,6 +337,7 @@
     word-break: break-word;
     position: relative;
     animation: chatMsgIn 0.22s var(--ease-out-expo);
+    box-shadow: 0 1px 2px rgba(20,25,40,0.05);
 }
 @keyframes chatMsgIn {
     from { opacity: 0; transform: translateY(6px) scale(0.98); }
@@ -295,6 +358,7 @@
     background: var(--surface-secondary);
     color: var(--text-tertiary);
     font-style: italic;
+    box-shadow: none;
 }
 
 .chat-text {
@@ -344,20 +408,148 @@
     cursor: pointer;
     z-index: 4;
     animation: chatMsgIn 0.22s var(--ease-out-expo);
+    transition: bottom 0.28s var(--ease-out-expo);
 }
 .chat-new-messages.hidden { display: none; }
 
-/* ---------- Composer ---------- */
+/* Cuando el picker de emojis está abierto, subir la píldora */
+.chat-overlay.emoji-open .chat-new-messages {
+    bottom: calc(350px + env(safe-area-inset-bottom));
+}
+
+/* =====================================================
+   EMOJI PICKER
+   ===================================================== */
+.chat-emoji-picker {
+    background: var(--surface);
+    border-top: 1px solid var(--border-soft);
+    display: flex;
+    flex-direction: column;
+    height: 280px;
+    flex-shrink: 0;
+    box-shadow: 0 -4px 14px rgba(20, 25, 40, 0.04);
+    animation: emojiSlideUp 0.25s var(--ease-out-expo);
+}
+.chat-emoji-picker.hidden { display: none; }
+
+@keyframes emojiSlideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.chat-emoji-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 8px 8px 4px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border-soft);
+    flex-shrink: 0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.chat-emoji-tabs::-webkit-scrollbar { display: none; }
+
+.emoji-tab {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+    font-family: inherit;
+}
+.emoji-tab:active { transform: scale(0.9); }
+.emoji-tab.active {
+    background: var(--accent-light);
+    color: var(--accent-dark);
+}
+
+.chat-emoji-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 6px 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+    gap: 2px;
+    -webkit-overflow-scrolling: touch;
+    align-content: start;
+    overscroll-behavior: contain;
+}
+
+.emoji-cell {
+    height: 40px;
+    border: none;
+    background: transparent;
+    font-size: 24px;
+    cursor: pointer;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+    transition: background 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+}
+.emoji-cell:active {
+    background: var(--bg);
+    transform: scale(0.88);
+}
+
+/* ---------- Botón emoji en el composer ---------- */
+.chat-emoji-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s var(--ease-smooth);
+    -webkit-tap-highlight-color: transparent;
+}
+.chat-emoji-btn:active { transform: scale(0.9); }
+.chat-emoji-btn.active {
+    color: var(--accent);
+    background: var(--accent-light);
+}
+
+/* =====================================================
+   COMPOSER
+   -----------------------------------------------------
+   FIX placeholder "trabado":
+   - Se quitaron las transitions (causaban repaints en foco).
+   - Se añadió min-height 44px (evita que el JS lo deje
+     en una altura minúscula tras autoResizeInput()).
+   - -webkit-appearance: none (iOS).
+   ===================================================== */
 .chat-composer {
-    display: flex; align-items: flex-end; gap: 8px;
+    display: flex; align-items: flex-end; gap: 6px;
     padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     background: var(--surface);
     border-top: 1px solid var(--border-soft);
+    flex-shrink: 0;
 }
 .chat-composer textarea {
     flex: 1;
+    min-width: 0;
+    min-height: 44px;
     border: 1.5px solid var(--border);
-    border-radius: 20px;
+    border-radius: 22px;
     padding: 11px 16px;
     font-family: inherit;
     font-size: 14.5px;
@@ -367,9 +559,18 @@
     resize: none;
     max-height: 120px;
     line-height: 1.35;
-    transition: border-color var(--duration-fast);
+    display: block;
+    -webkit-appearance: none;
+    appearance: none;
 }
-.chat-composer textarea:focus { border-color: var(--accent); background: var(--surface); }
+.chat-composer textarea:focus {
+    border-color: var(--accent);
+    background: var(--surface);
+}
+.chat-composer textarea::placeholder {
+    color: var(--text-tertiary);
+    opacity: 1;
+}
 .chat-composer #chat-send {
     width: 44px; height: 44px;
     border-radius: 50%;
@@ -383,10 +584,18 @@
     box-shadow: 0 6px 16px rgba(45,166,87,0.32);
     transition: transform var(--duration-fast), background var(--duration-fast);
 }
-.chat-composer #chat-send:active { transform: scale(0.94); background: var(--accent-dark); }
-.chat-composer #chat-send:disabled { opacity: 0.6; pointer-events: none; }
+.chat-composer #chat-send:active {
+    transform: scale(0.9);
+    background: var(--accent-dark);
+}
+.chat-composer #chat-send:disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
 
-/* ---------- Menú contextual ---------- */
+/* =====================================================
+   MENÚ CONTEXTUAL
+   ===================================================== */
 .chat-message-menu {
     position: fixed;
     z-index: 300;

@@ -77,7 +77,6 @@
     }
 
     function closeAllOverlays() {
-        // Nuevos overlays primero
         if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
             MessagingUI.closeChat(); return true;
         }
@@ -116,11 +115,13 @@
     }
 
     function onBackButton(e) {
-        if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
-            e.preventDefault(); MessagingUI.closeChat(); return;
-        }
+        // Orden por z-index del overlay más alto primero.
+        // El perfil del vendedor puede estar SOBRE el chat (z 260 > 250).
         if (window.SellerProfileUI && SellerProfileUI.isOpen && SellerProfileUI.isOpen()) {
             e.preventDefault(); SellerProfileUI.close(); return;
+        }
+        if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
+            e.preventDefault(); MessagingUI.closeChat(); return;
         }
         if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
             e.preventDefault(); PublicationUI.closeLightbox(); return;
@@ -151,14 +152,19 @@
     }
 
     function handlePopState(event) {
+        // Suppression: cuando un overlay cierra con history.back() y no
+        // quiere que el popstate cierre el overlay que está debajo.
         if (PublicationUI.consumeSuppressPopstate && PublicationUI.consumeSuppressPopstate()) return;
         if (window.MessagingUI && MessagingUI.consumeSuppressPopstate && MessagingUI.consumeSuppressPopstate()) return;
+        if (window.SellerProfileUI && SellerProfileUI.consumeSuppressPopstate && SellerProfileUI.consumeSuppressPopstate()) return;
 
-        if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
-            MessagingUI.closeChat(false); return;
-        }
+        // Orden por z-index: el overlay más alto primero.
+        // SellerProfileUI (260) está por encima de MessagingUI (250).
         if (window.SellerProfileUI && SellerProfileUI.isOpen && SellerProfileUI.isOpen()) {
             SellerProfileUI.close(false); return;
+        }
+        if (window.MessagingUI && MessagingUI.isChatOpen && MessagingUI.isChatOpen()) {
+            MessagingUI.closeChat(false); return;
         }
         if (PublicationUI.isLightboxOpen && PublicationUI.isLightboxOpen()) {
             PublicationUI.closeLightbox(false); return;

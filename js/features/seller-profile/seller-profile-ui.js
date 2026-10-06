@@ -2,6 +2,11 @@
    PIPGO · SELLER PROFILE UI
    Bottom sheet con el perfil público del vendedor.
    Reutilizado desde Product Sheet y Chat Header.
+
+   FIX:
+   - suppressPopstate: al cerrar con history.back(), el
+     handler global de popstate no cierra también el chat
+     que esté debajo.
    ===================================================== */
 
 (function () {
@@ -11,9 +16,16 @@
     let initialized = false;
     let historyPushed = false;
     let currentUid = null;
+    let openingLock = false;   // evita doble apertura por doble tap
+    let suppressPopstate = false;
 
     function open(uid, { preload = null } = {}) {
         if (!uid) { Toast.warning('Vendedor no disponible.'); return; }
+        if (openingLock) return;
+        if (isOpen()) return; // ya está abierto
+        openingLock = true;
+        setTimeout(() => { openingLock = false; }, 350);
+
         currentUid = uid;
         backdrop.classList.add('open');
         document.body.style.overflow = 'hidden';
@@ -31,6 +43,9 @@
         if (historyPushed) {
             historyPushed = false;
             if (syncHistory) {
+                // Marca de supresión: el popstate que dispara el
+                // history.back() no debe cerrar otros overlays.
+                suppressPopstate = true;
                 try { history.back(); } catch (e) {}
             }
         }
@@ -62,6 +77,9 @@
             try { profile = await SellerProfileService.getPublicProfile(uid); }
             catch (e) { profile = null; }
         }
+
+        // Si mientras cargaba el usuario cerró el sheet, no pintar
+        if (!isOpen() || currentUid !== uid) return;
 
         if (!profile || !profile.username) {
             contentEl.innerHTML = `
@@ -142,6 +160,8 @@
 
         const msgBtn = contentEl.querySelector('#sp-message');
         if (msgBtn) msgBtn.addEventListener('click', () => {
+            // Cerramos el sheet primero (con syncHistory para que
+            // el popstate interno no cierre el chat que está debajo).
             close();
             setTimeout(() => {
                 if (window.MessagingUI && MessagingUI.openChatWith) {
@@ -199,6 +219,9 @@
         open,
         close,
         isOpen,
-        consumeSuppressPopstate: () => false
+        consumeSuppressPopstate: () => {
+            if (suppressPopstate) { suppressPopstate = false; return true; }
+            return false;
+        }
     };
 })();

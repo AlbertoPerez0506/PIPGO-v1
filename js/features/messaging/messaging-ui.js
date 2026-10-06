@@ -5,6 +5,8 @@
      y solo la primera vez inserta "Vi tu publicación de X."
    - Abrir desde Mensajes (vendedor seguido): abre chat
      SIN mensaje automático.
+   - Emoji picker estilo WhatsApp.
+   - Apertura inmediata del overlay (sin esperas de red).
    ===================================================== */
 
 (function () {
@@ -22,7 +24,16 @@
         contextBanner, contextName, contextOpenBtn,
         messagesEl, newMessagesEl, newMessagesText,
         inputEl, sendBtn,
-        messageMenuEl;
+        messageMenuEl,
+        emojiBtn, emojiPicker, emojiTabs, emojiScroll;
+
+    // Emoji
+    let recentEmojis = [];
+    let currentEmojiCategory = 'smileys';
+
+    // Token para cancelar aperturas concurrentes
+    let openChatToken = 0;
+    let openingSellerProfile = false;
 
     let conversations = [];
     let currentChat = {
@@ -35,12 +46,118 @@
         oldestCreatedAt: null,
         hasMore: true,
         loadedOnce: false,
-        menuMessage: null
+        menuMessage: null,
+        _savedSelection: null
     };
 
     let suppressPopstate = false;
     let chatHistoryPushed = false;
     let bodyLockPrev = '';
+
+    /* =====================================================
+       EMOJI CATALOG
+       ===================================================== */
+    const EMOJI_CATEGORIES = {
+        smileys: {
+            icon: 'fa-face-smile',
+            label: 'Emociones',
+            emojis: [
+                '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩',
+                '😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐',
+                '🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒',
+                '🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕',
+                '😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱',
+                '😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','🤡','🤖'
+            ]
+        },
+        gestures: {
+            icon: 'fa-hand',
+            label: 'Gestos',
+            emojis: [
+                '👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆',
+                '👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','💪','💅',
+                '👀','👁️','👅','👄','🧠','🫀','🫁','🦷','🦴'
+            ]
+        },
+        hearts: {
+            icon: 'fa-heart',
+            label: 'Amor',
+            emojis: [
+                '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖',
+                '💘','💝','💟','♥️','💋','💌','🌹','🌷','💐','🌸','🌺','🌻','🌼','🏵️'
+            ]
+        },
+        animals: {
+            icon: 'fa-paw',
+            label: 'Animales',
+            emojis: [
+                '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈',
+                '🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🦋',
+                '🐌','🐞','🐜','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡',
+                '🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🐘','🦛','🦏','🐪','🐫',
+                '🦒','🦘','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🐈','🐓'
+            ]
+        },
+        food: {
+            icon: 'fa-pizza-slice',
+            label: 'Comida',
+            emojis: [
+                '🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝',
+                '🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🌽','🥕','🫒','🧄','🧅','🥔','🍠','🥐',
+                '🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔',
+                '🍟','🍕','🫓','🥪','🥙','🧆','🌮','🌯','🫔','🥗','🥘','🫕','🥫','🍝','🍜','🍲',
+                '🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥠','🥮','🍢','🍡','🍧','🍨',
+                '🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🥛'
+            ]
+        },
+        activities: {
+            icon: 'fa-futbol',
+            label: 'Actividades',
+            emojis: [
+                '⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🏑','🥍',
+                '🏏','🪃','🥅','⛳','🪁','🏹','🎣','🤿','🥊','🥋','🎽','🛹','🛼','🛷','⛸️','🥌',
+                '🎿','⛷️','🏂','🪂','🏋️','🤼','🤸','⛹️','🤺','🤾','🏌️','🏇','🧘','🏄','🏊','🤽',
+                '🚣','🧗','🚵','🚴','🏆','🥇','🥈','🥉','🏅','🎖️','🏵️','🎗️','🎫','🎟️','🎪','🤹',
+                '🎭','🩰','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🎷','🎺','🎸','🪕','🎻','🎲','♟️',
+                '🎯','🎳','🎮','🎰','🧩'
+            ]
+        },
+        travel: {
+            icon: 'fa-plane',
+            label: 'Viajes',
+            emojis: [
+                '🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🛴','🚲',
+                '🛵','🏍️','🛺','🚨','🚔','🚍','🚘','🚖','🚡','🚠','🚟','🚃','🚋','🚞','🚝','🚄',
+                '🚅','🚈','🚂','🚆','🚇','🚊','🚉','✈️','🛫','🛬','🛩️','💺','🛰️','🚀','🛸','🚁',
+                '🛶','⛵','🚤','🛥️','🛳️','⛴️','🚢','⚓','⛽','🚧','🚦','🚥','🗺️','🗿','🗽','🗼',
+                '🏰','🏯','🏟️','🎡','🎢','🎠','⛲','⛱️','🏖️','🏝️','🏜️','🌋','⛰️','🏔️','🗻','🏕️'
+            ]
+        },
+        objects: {
+            icon: 'fa-lightbulb',
+            label: 'Objetos',
+            emojis: [
+                '⌚','📱','📲','💻','⌨️','🖥️','🖨️','🖱️','🕹️','💽','💾','💿','📀','📼','📷','📸',
+                '📹','🎥','📽️','🎞️','📞','☎️','📟','📠','📺','📻','🎙️','🧭','⏱️','⏲️','⏰','🕰️',
+                '⌛','⏳','📡','🔋','🔌','💡','🔦','🕯️','🪔','🧯','💸','💵','💰','💳','💎','⚖️',
+                '🔧','🔨','⚒️','🛠️','⛏️','🔩','⚙️','🧱','⛓️','🧲','🔫','💣','🧨','🪓','🔪','🗡️',
+                '⚔️','🛡️','🏺','🔮','📿','🧿','💈','🔭','🔬','🩹','🩺','💊','💉','🧬','🦠','🧪',
+                '🌡️','🧹','🧺','🧻','🚽','🚿','🛁','🧼','🪥','🪒','🧽','🧴','🔑','🗝️','🚪','🪑'
+            ]
+        },
+        symbols: {
+            icon: 'fa-star',
+            label: 'Símbolos',
+            emojis: [
+                '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖',
+                '☮️','✝️','☪️','🕉️','☸️','✡️','🔯','🕎','☯️','☦️','🛐','⛎','♈','♉','♊','♋',
+                '♌','♍','♎','♏','♐','♑','♒','♓','🆔','⚛️','🉑','☢️','☣️','📴','📳','🈶',
+                '✴️','🆚','💮','🉐','㊙️','㊗️','🈴','🈵','🈹','🈲','🅰️','🅱️','🆎','🆑','🅾️','🆘',
+                '❌','⭕','🛑','⛔','📛','🚫','💯','💢','♨️','🚷','🚯','🚳','🚱','🔞','📵','🚭',
+                '❗','❕','❓','❔','‼️','⁉️','⚠️','🚸','🔱','⚜️','🔰','♻️','✅','💹','❇️','✳️'
+            ]
+        }
+    };
 
     /* ---------- Utils ---------- */
     function isNearBottom(el, threshold = 80) {
@@ -77,8 +194,8 @@
         const d = ts.toDate ? ts.toDate() : new Date(ts);
         const diff = Date.now() - d.getTime();
         if (diff < 60_000) return 'ahora';
-        if (diff < 3600_000) return `${Math.floor(diff/60_000)} min`;
-        if (diff < 86_400_000) return `${Math.floor(diff/3600_000)} h`;
+        if (diff < 3600_000) return `${Math.floor(diff / 60_000)} min`;
+        if (diff < 86_400_000) return `${Math.floor(diff / 3600_000)} h`;
         return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
     }
 
@@ -205,17 +322,17 @@
             openChat({ conversationId: conv.id, otherUid });
         });
 
-        // Hidratar identidad pública (cache)
+        // Hidratar identidad pública (cache) sin bloquear el click
         if (otherUid) {
             SellerProfileService.getPublicProfile(otherUid).then(profile => {
                 if (!profile) return;
                 const avatarEl = row.querySelector('.msg-avatar');
                 const userEl = row.querySelector('.msg-username');
-                if (profile.avatarUrl) avatarEl.innerHTML = avatarHtml(profile.avatarUrl);
-                if (profile.username) {
+                if (profile.avatarUrl && avatarEl) avatarEl.innerHTML = avatarHtml(profile.avatarUrl);
+                if (profile.username && userEl) {
                     userEl.textContent = '@' + profile.username;
                 }
-            });
+            }).catch(() => {});
         }
 
         return row;
@@ -223,8 +340,6 @@
 
     /* =====================================================
        BÚSQUEDA — SOLO VENDEDORES SEGUIDOS
-       Follow aún NO funcional: no existen datos. Se muestra
-       el estado vacío correspondiente.
        ===================================================== */
     function onSearchInput() {
         const q = (searchInput.value || '').trim();
@@ -238,54 +353,77 @@
 
     /* =====================================================
        ABRIR CHAT
+       -----------------------------------------------------
+       FIX:
+       - El overlay se abre INMEDIATAMENTE, sin esperar red.
+       - Token de cancelación por si el usuario abre varios
+         chats rápido seguidos.
+       - NO se hace focus() al input automáticamente.
        ===================================================== */
-
-    /**
-     * Abre un chat concreto.
-     * @param {Object} opts
-     * @param {string} [opts.conversationId]
-     * @param {string} [opts.otherUid]
-     * @param {Object} [opts.publicationContext]  { id, name, mainImage }
-     * @param {boolean} [opts.fromPublication]    si viene desde Product Sheet
-     */
     async function openChat({ conversationId, otherUid, publicationContext = null, fromPublication = false } = {}) {
         if (!AppState.currentUser) {
             AuthUI.openAuthModal('login');
             return;
         }
 
-        // Resolver otherUid si solo tenemos conversationId
+        const myToken = ++openChatToken;
+
+        // Resolver otherUid si solo tenemos conversationId.
+        // Normalmente ya viene del listado, así que es sync.
         let conv = null;
         if (conversationId) {
             conv = conversations.find(c => c.id === conversationId) || null;
-            if (!conv) conv = await ConversationService.getConversation(conversationId);
+            if (!conv) {
+                try {
+                    conv = await ConversationService.getConversation(conversationId);
+                } catch (e) { conv = null; }
+            }
+            if (myToken !== openChatToken) return;
             if (conv) otherUid = otherUid || ConversationService.otherParticipantId(conv, AppState.currentUser.uid);
         }
 
         if (!otherUid) { Toast.error('No pudimos abrir la conversación.'); return; }
 
+        // Cerrar pickers/menús previos
+        closeEmojiPicker();
+        closeMessageMenu();
+
+        // Reset estado del chat
         currentChat.otherUid = otherUid;
         currentChat.publicationContext = publicationContext;
         currentChat.messages = [];
         currentChat.oldestCreatedAt = null;
         currentChat.hasMore = true;
         currentChat.loadedOnce = false;
+        currentChat.otherProfile = null;
+        currentChat._savedSelection = null;
 
-        // Reset UI
+        // Reset UI con loading mínimo
         messagesEl.innerHTML = `<div class="chat-loading"><i class="fa-solid fa-spinner fa-spin"></i> Abriendo conversación…</div>`;
         inputEl.value = '';
         autoResizeInput();
         renderContextBanner();
+        renderChatHeader();
         newMessagesEl.classList.add('hidden');
 
-        // Perfil del vendedor
-        try {
-            currentChat.otherProfile = await SellerProfileService.getPublicProfile(otherUid);
-        } catch (e) { currentChat.otherProfile = null; }
-        renderChatHeader();
-
-        // Mostrar overlay
+        // Mostrar overlay YA — sin esperar red
         openOverlay();
+
+        if (window.HapticsService) HapticsService.light();
+
+        // Cargar perfil del vendedor (sin bloquear la apertura)
+        if (window.SellerProfileService && otherUid) {
+            try {
+                const profile = await SellerProfileService.getPublicProfile(otherUid);
+                if (myToken !== openChatToken) return;
+                if (currentChat.otherUid === otherUid) {
+                    currentChat.otherProfile = profile;
+                    renderChatHeader();
+                }
+            } catch (e) { /* silent */ }
+        }
+
+        if (myToken !== openChatToken) return;
 
         // Crear conversación si no existe
         if (!conversationId) {
@@ -293,10 +431,11 @@
                 const { conversation, created } = await ConversationService.getOrCreateConversation(
                     AppState.currentUser.uid, otherUid
                 );
+                if (myToken !== openChatToken) return;
                 currentChat.conversationId = conversation.id;
 
-                // Si venimos desde una publicación y es la primera vez,
-                // insertar mensaje contextual.
+                // Mensaje contextual: solo si venimos desde publicación
+                // Y es la primera vez que se crea la conversación.
                 if (fromPublication && created && publicationContext && publicationContext.id && publicationContext.name) {
                     try {
                         await MessageService.sendMessage(conversation.id, {
@@ -312,15 +451,19 @@
                 }
             } catch (e) {
                 Logger.error('openChat getOrCreate', e);
-                Toast.error('No pudimos abrir la conversación.');
-                closeOverlay();
+                if (myToken === openChatToken) {
+                    Toast.error('No pudimos abrir la conversación.');
+                    closeOverlay();
+                }
                 return;
             }
         } else {
             currentChat.conversationId = conversationId;
         }
 
-        // Limpieza oportunista de expirados (no bloquea el render)
+        if (myToken !== openChatToken) return;
+
+        // Limpieza oportunista (no bloquea)
         MessageService.cleanupExpiredMessages(currentChat.conversationId).catch(() => {});
 
         // Suscribirse a mensajes
@@ -351,7 +494,7 @@
 
     function renderChatHeader() {
         const profile = currentChat.otherProfile || {};
-        const username = profile.username ? '@' + profile.username : '@usuario';
+        const username = profile.username ? '@' + profile.username : '@…';
         chatUsername.textContent = username;
         chatRole.textContent = 'Vendedor';
         chatAvatar.innerHTML = avatarHtml(profile.avatarUrl, 'fa-user');
@@ -384,7 +527,6 @@
     function handleMessagesChange(rawList) {
         const uid = AppState.currentUser.uid;
 
-        // Filtrado: expirados y ocultos para mí
         const visible = rawList.filter(m =>
             !MessageService.isExpired(m) &&
             !(Array.isArray(m.hiddenFor) && m.hiddenFor.includes(uid))
@@ -405,11 +547,14 @@
         const incoming = newLastId && newLastId !== prevLastId;
 
         if (incoming) {
-            if (wasAtBottom) scrollToBottom('smooth');
-            else showNewMessagePill();
+            if (wasAtBottom) {
+                scrollToBottom('smooth');
+                if (window.HapticsService) HapticsService.light();
+            } else {
+                showNewMessagePill();
+            }
         }
 
-        // Marcar leído al llegar mensajes nuevos y estoy al fondo
         if (incoming && wasAtBottom) {
             ConversationService.markAsRead(currentChat.conversationId, uid).catch(() => {});
         }
@@ -437,6 +582,7 @@
             const empty = document.createElement('div');
             empty.className = 'chat-empty';
             empty.innerHTML = `
+                <div class="chat-empty-icon"><i class="fa-regular fa-comments"></i></div>
                 <p>Inicia la conversación.</p>`;
             messagesEl.appendChild(empty);
             return;
@@ -488,7 +634,6 @@
                 <span class="chat-time">${formatHour(msg.createdAt)}${editedTag}</span>
             </div>`;
 
-        // Contexto de publicación (mensaje automático)
         if (msg.type === 'publication_context' && msg.publicationName) {
             const ref = document.createElement('div');
             ref.className = 'chat-context-mini';
@@ -496,12 +641,11 @@
             wrap.querySelector('.chat-bubble').appendChild(ref);
         }
 
-        // Menú contextual (long-press / click derecho)
         wrap.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             openMessageMenu(msg, e.clientX, e.clientY);
         });
-        // Long-press táctil
+
         let pressTimer = null;
         wrap.addEventListener('touchstart', (e) => {
             pressTimer = setTimeout(() => {
@@ -520,6 +664,7 @@
        MENÚ CONTEXTUAL
        ===================================================== */
     function openMessageMenu(msg, x, y) {
+        closeEmojiPicker();
         currentChat.menuMessage = msg;
         const isOwn = msg.senderId === AppState.currentUser.uid;
         const canEdit = isOwn && !msg.deletedForEveryone && !MessageService.isExpired(msg);
@@ -610,18 +755,234 @@
     }
 
     /* =====================================================
+       EMOJI PICKER
+       ===================================================== */
+    function createEmojiPicker() {
+        const composer = overlay.querySelector('.chat-composer');
+        if (!composer) return;
+
+        // Botón de emojis: se inserta al inicio del composer
+        const btn = document.createElement('button');
+        btn.id = 'chat-emoji-btn';
+        btn.className = 'chat-emoji-btn';
+        btn.type = 'button';
+        btn.setAttribute('aria-label', 'Abrir emojis');
+        btn.innerHTML = '<i class="fa-regular fa-face-smile"></i>';
+        composer.insertBefore(btn, composer.firstChild);
+
+        // Panel del picker: se inserta justo ANTES del composer
+        const picker = document.createElement('div');
+        picker.id = 'chat-emoji-picker';
+        picker.className = 'chat-emoji-picker hidden';
+        picker.innerHTML = `
+            <div class="chat-emoji-tabs" id="chat-emoji-tabs"></div>
+            <div class="chat-emoji-scroll" id="chat-emoji-scroll"></div>
+        `;
+        composer.insertAdjacentElement('beforebegin', picker);
+
+        emojiBtn = btn;
+        emojiPicker = picker;
+        emojiTabs = picker.querySelector('#chat-emoji-tabs');
+        emojiScroll = picker.querySelector('#chat-emoji-scroll');
+    }
+
+    function initEmojiPicker() {
+        if (!emojiBtn || !emojiPicker) return;
+
+        // Cargar recientes desde Storage
+        recentEmojis = Storage.get('msg_recent_emojis', []) || [];
+        if (!Array.isArray(recentEmojis)) recentEmojis = [];
+
+        renderEmojiTabs();
+        renderEmojiCategory(currentEmojiCategory);
+
+        // Click en tabs
+        // FIX: no re-renderizar innerHTML (destruye el target). En su
+        // lugar, togglear la clase active. Además stopPropagation para
+        // que el handler global de "click fuera" no cierre el picker.
+        emojiTabs.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btn = e.target.closest('[data-cat]');
+            if (!btn) return;
+            const newCat = btn.dataset.cat;
+            if (newCat === currentEmojiCategory) return;
+            currentEmojiCategory = newCat;
+            emojiTabs.querySelectorAll('.emoji-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.cat === currentEmojiCategory);
+            });
+            renderEmojiCategory(currentEmojiCategory);
+        });
+
+        // Click en emoji → insertar
+        // FIX: stopPropagation para que el handler global no cierre el picker.
+        emojiScroll.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const cell = e.target.closest('[data-emoji]');
+            if (!cell) return;
+            insertEmoji(cell.dataset.emoji);
+        });
+
+        // Toggle del picker
+        emojiBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleEmojiPicker();
+        });
+
+        // Cerrar al click fuera
+        document.addEventListener('click', (e) => {
+            if (emojiPicker.classList.contains('hidden')) return;
+            if (emojiPicker.contains(e.target)) return;
+            if (emojiBtn.contains(e.target)) return;
+            closeEmojiPicker();
+        });
+
+        // Cerrar cuando el input recibe foco (usuario toca el textarea)
+        inputEl.addEventListener('focus', () => {
+            if (!emojiPicker.classList.contains('hidden')) {
+                closeEmojiPicker();
+            }
+        });
+    }
+
+    function renderEmojiTabs() {
+        const cats = [];
+        if (recentEmojis.length) {
+            cats.push({ key: 'recent', icon: 'fa-clock-rotate-left' });
+        }
+        Object.entries(EMOJI_CATEGORIES).forEach(([key, data]) => {
+            cats.push({ key, icon: data.icon });
+        });
+
+        emojiTabs.innerHTML = cats.map(c => `
+            <button class="emoji-tab${c.key === currentEmojiCategory ? ' active' : ''}"
+                    data-cat="${c.key}" type="button" aria-label="${c.key}">
+                <i class="fa-solid ${c.icon}"></i>
+            </button>
+        `).join('');
+    }
+
+    function renderEmojiCategory(catKey) {
+        let emojis;
+        if (catKey === 'recent') {
+            emojis = recentEmojis;
+        } else {
+            const cat = EMOJI_CATEGORIES[catKey];
+            emojis = cat ? cat.emojis : [];
+        }
+        emojiScroll.innerHTML = emojis.map(e =>
+            `<button class="emoji-cell" data-emoji="${e}" type="button" aria-label="${e}">${e}</button>`
+        ).join('');
+        emojiScroll.scrollTop = 0;
+    }
+
+    function insertEmoji(emoji) {
+        if (!inputEl) return;
+
+        let start, end;
+        if (currentChat._savedSelection) {
+            start = currentChat._savedSelection.start;
+            end = currentChat._savedSelection.end;
+        } else {
+            start = (typeof inputEl.selectionStart === 'number') ? inputEl.selectionStart : inputEl.value.length;
+            end = (typeof inputEl.selectionEnd === 'number') ? inputEl.selectionEnd : inputEl.value.length;
+        }
+
+        const before = inputEl.value.slice(0, start);
+        const after = inputEl.value.slice(end);
+        inputEl.value = before + emoji + after;
+        const newPos = start + emoji.length;
+
+        currentChat._savedSelection = { start: newPos, end: newPos };
+
+        try { inputEl.setSelectionRange(newPos, newPos); } catch (e) {}
+
+        autoResizeInput();
+
+        // Recientes
+        const wasEmptyRecents = recentEmojis.length === 0;
+        recentEmojis = [emoji, ...recentEmojis.filter(e => e !== emoji)].slice(0, 24);
+        Storage.set('msg_recent_emojis', recentEmojis);
+
+        // Si acaba de aparecer la primera reciente, renderizar tabs
+        // (para añadir la pestaña de recientes), sino solo la lista
+        // si el usuario está viendo recientes.
+        if (wasEmptyRecents) {
+            renderEmojiTabs();
+        }
+        if (currentEmojiCategory === 'recent') {
+            renderEmojiCategory('recent');
+        }
+
+        if (window.HapticsService) HapticsService.light();
+    }
+
+    function toggleEmojiPicker() {
+        if (emojiPicker.classList.contains('hidden')) {
+            openEmojiPicker();
+        } else {
+            closeEmojiPicker();
+        }
+    }
+
+    function openEmojiPicker() {
+        closeMessageMenu();
+
+        if (document.activeElement === inputEl) {
+            currentChat._savedSelection = {
+                start: inputEl.selectionStart,
+                end: inputEl.selectionEnd
+            };
+            inputEl.blur();
+        } else if (!currentChat._savedSelection) {
+            currentChat._savedSelection = {
+                start: inputEl.value.length,
+                end: inputEl.value.length
+            };
+        }
+
+        emojiPicker.classList.remove('hidden');
+        emojiBtn.classList.add('active');
+        overlay.classList.add('emoji-open');
+        updateEmojiBtnIcon();
+
+        if (isNearBottom(messagesEl, 120)) {
+            setTimeout(() => scrollToBottom('auto'), 60);
+        }
+    }
+
+    function closeEmojiPicker() {
+        if (!emojiPicker) return;
+        emojiPicker.classList.add('hidden');
+        if (emojiBtn) emojiBtn.classList.remove('active');
+        if (overlay) overlay.classList.remove('emoji-open');
+        updateEmojiBtnIcon();
+    }
+
+    function updateEmojiBtnIcon() {
+        if (!emojiBtn) return;
+        if (emojiPicker.classList.contains('hidden')) {
+            emojiBtn.innerHTML = '<i class="fa-regular fa-face-smile"></i>';
+            emojiBtn.setAttribute('aria-label', 'Abrir emojis');
+        } else {
+            emojiBtn.innerHTML = '<i class="fa-regular fa-keyboard"></i>';
+            emojiBtn.setAttribute('aria-label', 'Cerrar emojis');
+        }
+    }
+
+    /* =====================================================
        ENVIAR
        ===================================================== */
     function autoResizeInput() {
+        if (!inputEl) return;
         inputEl.style.height = 'auto';
-        inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+        inputEl.style.height = Math.min(Math.max(inputEl.scrollHeight, 44), 120) + 'px';
     }
 
     async function sendCurrent() {
         const raw = inputEl.value || '';
         const check = MessageService.sanitizeText(raw);
         if (!check.valid) {
-            if (raw.trim() === '') return; // ignorar vacío silenciosamente
+            if (raw.trim() === '') return;
             Toast.warning(check.error);
             return;
         }
@@ -629,6 +990,7 @@
 
         sendBtn.disabled = true;
         inputEl.value = '';
+        currentChat._savedSelection = null;
         autoResizeInput();
 
         try {
@@ -636,6 +998,9 @@
                 senderId: AppState.currentUser.uid,
                 text: check.value
             });
+
+            if (window.HapticsService) HapticsService.light();
+
             scrollToBottom('smooth');
             hideNewMessagePill();
         } catch (e) {
@@ -646,7 +1011,6 @@
             autoResizeInput();
         } finally {
             sendBtn.disabled = false;
-            inputEl.focus();
         }
     }
 
@@ -661,10 +1025,13 @@
             history.pushState({ view: AppState.currentView, overlay: 'chat' }, '', '');
             chatHistoryPushed = true;
         }
-        setTimeout(() => inputEl.focus(), 60);
+        // NOTA: NO hacemos focus() al input. El usuario abre el chat
+        // y decide cuándo escribir tocando el textarea.
     }
 
     function closeOverlay(syncHistory = true) {
+        closeEmojiPicker();
+        closeMessageMenu();
         overlay.classList.add('hidden');
         document.body.style.overflow = bodyLockPrev || '';
         bodyLockPrev = '';
@@ -714,6 +1081,10 @@
         sendBtn = document.getElementById('chat-send');
         messageMenuEl = document.getElementById('chat-message-menu');
 
+        // Emoji picker dinámico
+        createEmojiPicker();
+        initEmojiPicker();
+
         if (searchInput) {
             searchInput.addEventListener('input', onSearchInput);
         }
@@ -727,9 +1098,18 @@
         if (backBtn) backBtn.addEventListener('click', () => closeOverlay());
 
         if (sellerInfoBtn) {
-            sellerInfoBtn.addEventListener('click', () => {
+            sellerInfoBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Cerrar emoji picker si estaba abierto; así el sheet
+                // del perfil queda limpio encima.
+                closeEmojiPicker();
+                closeMessageMenu();
+                if (openingSellerProfile) return;
                 if (!currentChat.otherUid) return;
+                openingSellerProfile = true;
                 SellerProfileUI.open(currentChat.otherUid, { preload: currentChat.otherProfile });
+                setTimeout(() => { openingSellerProfile = false; }, 400);
             });
         }
 
@@ -758,7 +1138,10 @@
         }
 
         if (inputEl) {
-            inputEl.addEventListener('input', autoResizeInput);
+            inputEl.addEventListener('input', () => {
+                autoResizeInput();
+                currentChat._savedSelection = null;
+            });
             inputEl.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -776,9 +1159,14 @@
         });
         document.addEventListener('scroll', () => closeMessageMenu(), true);
 
-        // Cerrar overlay con ESC
+        // ESC global
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') return;
+            if (emojiPicker && !emojiPicker.classList.contains('hidden')) {
+                e.preventDefault();
+                closeEmojiPicker();
+                return;
+            }
             if (messageMenuEl && !messageMenuEl.classList.contains('hidden')) {
                 e.preventDefault();
                 closeMessageMenu();
